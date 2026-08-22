@@ -10,6 +10,10 @@ config flow, coordinador de actualizaciones y entidades de verdad.
 > binary sensor, sensitivity/linkage controls, SD-card and Wi-Fi diagnostics,
 > and a generic CGI service. Docs are in Spanish.
 
+<p align="center">
+  <img src="docs/arquitectura.svg" alt="Diagrama: Home Assistant habla con el coordinador, que habla con el cliente CGI, que habla con la cámara" width="900">
+</p>
+
 ---
 
 ## Por qué

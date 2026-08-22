@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" width="900" height="430" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Arquitectura de la integración foscam_c1">
+  <rect width="900" height="430" rx="10" fill="#f6f8fa"/>
+
+  <text x="30" y="38" font-size="17" font-weight="600" fill="#1f2328">Cómo funciona la integración</text>
+  <text x="30" y="59" font-size="12.5" fill="#59636e">Un solo coordinador asíncrono en lugar de un proceso curl cada 3 segundos</text>
+
+  <!-- Home Assistant -->
+  <rect x="30" y="84" width="220" height="270" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <rect x="30" y="84" width="220" height="30" rx="8" fill="#eaeef2"/>
+  <rect x="30" y="106" width="220" height="8" fill="#eaeef2"/>
+  <text x="46" y="104" font-size="12.5" font-weight="600" fill="#1f2328">Home Assistant</text>
+
+  <g font-size="11.5" fill="#1f2328">
+    <rect x="46" y="128" width="188" height="30" rx="5" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="58" y="147">switch · detección, IR, alarma</text>
+    <rect x="46" y="166" width="188" height="30" rx="5" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="58" y="185">binary_sensor · movimiento</text>
+    <rect x="46" y="204" width="188" height="30" rx="5" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="58" y="223">sensor · SD, wifi, firmware</text>
+    <rect x="46" y="242" width="188" height="30" rx="5" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="58" y="261">number · sensibilidad</text>
+    <rect x="46" y="280" width="188" height="30" rx="5" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="58" y="299">button · reinicio, cobertura</text>
+  </g>
+  <text x="46" y="332" font-size="11.5" fill="#59636e">30 entidades · config flow</text>
+
+  <!-- Integración -->
+  <rect x="310" y="84" width="250" height="270" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <rect x="310" y="84" width="250" height="30" rx="8" fill="#eaeef2"/>
+  <rect x="310" y="106" width="250" height="8" fill="#eaeef2"/>
+  <text x="326" y="104" font-size="12.5" font-weight="600" fill="#1f2328">custom_components/foscam_c1</text>
+
+  <rect x="326" y="128" width="218" height="86" rx="6" fill="#fff8c5" stroke="#d4a72c"/>
+  <text x="338" y="148" font-size="12.5" font-weight="600" fill="#1f2328">FoscamCoordinator</text>
+  <g font-size="11.5" fill="#59636e">
+    <text x="338" y="168">estado en vivo · cada 5 s</text>
+    <text x="338" y="185">configuración · cada 60 s</text>
+    <text x="338" y="202">info del equipo · cada 15 min</text>
+  </g>
+
+  <rect x="326" y="228" width="218" height="106" rx="6" fill="#dafbe1" stroke="#4ac26b"/>
+  <text x="338" y="248" font-size="12.5" font-weight="600" fill="#1f2328">FoscamClient</text>
+  <g font-size="11.5" fill="#59636e">
+    <text x="338" y="268">XML tolerante a fallos</text>
+    <text x="338" y="285">autodetección de firmware</text>
+    <text x="338" y="302">credenciales fuera del log</text>
+    <text x="338" y="319">read · modify · write</text>
+  </g>
+
+  <!-- Cámara -->
+  <rect x="620" y="84" width="250" height="270" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <rect x="620" y="84" width="250" height="30" rx="8" fill="#eaeef2"/>
+  <rect x="620" y="106" width="250" height="8" fill="#eaeef2"/>
+  <text x="636" y="104" font-size="12.5" font-weight="600" fill="#1f2328">Foscam C1</text>
+
+  <g transform="translate(700,142)">
+    <rect x="0" y="14" width="94" height="58" rx="8" fill="#eaeef2" stroke="#8c959f"/>
+    <circle cx="47" cy="43" r="19" fill="#ffffff" stroke="#59636e" stroke-width="2"/>
+    <circle cx="47" cy="43" r="8" fill="#59636e"/>
+    <rect x="30" y="0" width="34" height="16" rx="4" fill="#8c959f"/>
+  </g>
+
+  <rect x="636" y="238" width="218" height="96" rx="6" fill="#f6f8fa" stroke="#d1d9e0"/>
+  <text x="648" y="258" font-size="12" font-weight="600" fill="#1f2328">CGIProxy.fcgi</text>
+  <g font-size="11.5" fill="#59636e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <text x="648" y="278">getDevState</text>
+    <text x="648" y="296">getMotionDetectConfig</text>
+    <text x="648" y="314">setMotionDetectConfig</text>
+  </g>
+
+  <!-- Flechas -->
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 z" fill="#59636e"/>
+    </marker>
+  </defs>
+  <line x1="306" y1="200" x2="252" y2="200" stroke="#59636e" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="252" y1="238" x2="306" y2="238" stroke="#59636e" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="562" y1="200" x2="616" y2="200" stroke="#59636e" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="616" y1="238" x2="562" y2="238" stroke="#59636e" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <text x="272" y="192" font-size="10.5" fill="#59636e" text-anchor="middle">estado</text>
+  <text x="279" y="256" font-size="10.5" fill="#59636e" text-anchor="middle">órdenes</text>
+  <text x="589" y="192" font-size="10.5" fill="#59636e" text-anchor="middle">HTTPS</text>
+  <text x="589" y="256" font-size="10.5" fill="#59636e" text-anchor="middle">XML</text>
+
+  <rect x="30" y="374" width="840" height="34" rx="6" fill="#fff1e5" stroke="#f0883e"/>
+  <text x="46" y="396" font-size="12" fill="#1f2328">setMotionDetectConfig borra lo que no se le envía · el cliente relee, modifica y reenvía la configuración completa</text>
+</svg>
