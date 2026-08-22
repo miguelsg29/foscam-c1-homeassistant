@@ -31,6 +31,28 @@ mano (`cp .secret-values.example .secret-values`, un valor por línea) y
 vacío, `check_no_secrets.py` sigue saliendo con 0 y sólo avisa por stderr: el
 hueco queda abierto sin que nada falle.
 
+Nada de esto corre solo. Hay que instalar los hooks una vez por clon:
+
+```bash
+pip install pre-commit
+pre-commit install --hook-type pre-commit --hook-type commit-msg
+```
+
+Sin eso la única red es CI, y CI salta **después** del push, cuando el secreto
+ya es público. Peor aún: en CI no existe `.secret-values` —es local por
+diseño—, así que allí `check_no_secrets.py` sólo corre los patrones y la capa
+de valores literales **no existe**. Es decir: la comparación contra tus valores
+reales sólo puede ocurrir en tu máquina. Si no instalas los hooks, esa capa no
+se ejecuta en ningún sitio. El `--hook-type commit-msg` no es opcional.
+
+**El mensaje de commit es un canal aparte.** El escaneo de archivos sólo ve
+`git ls-files` y gitleaks sólo ve los parches; un mensaje no es ninguna de las
+dos cosas. La fuga que motivó todo esto estaba justo ahí y sobrevivió a la
+limpieza de los archivos. Lo cubre `check_no_secrets.py --commit-msg`, que
+corre en la etapa `commit-msg`. Importa más que las otras capas porque un
+mensaje ya empujado no se corrige sin reescribir el historial y un
+`push --force`.
+
 En documentación y tests usa siempre: `192.0.2.10` (RFC 5737, reservado para
 ejemplos), puerto `443`, usuario `camera_user`, y contraseñas inventadas.
 
@@ -40,7 +62,7 @@ Nunca escribas un valor real "solo como ejemplo ilustrativo". Nunca.
 
 ```bash
 ruff check . && ruff format --check .
-pytest -q                      # 18 pruebas, no necesitan Home Assistant
+pytest -q                      # 30 pruebas, no necesitan Home Assistant
 python tools/check_no_secrets.py
 gitleaks detect --config .gitleaks.toml --redact    # si lo tienes instalado
 ```

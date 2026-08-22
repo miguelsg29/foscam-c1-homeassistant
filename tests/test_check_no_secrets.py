@@ -81,3 +81,69 @@ def test_clean_file_passes(checker, tmp_path, monkeypatch):
     limpio.write_text("host 192.0.2.10, puerto 443, usuario camera_user\n", encoding="utf-8")
 
     assert checker.main([str(limpio)]) == 0
+
+
+def _con_denylist(checker, tmp_path, monkeypatch, valor="Xy^Qm*Vb3Nz8"):
+    denylist = tmp_path / ".secret-values"
+    denylist.write_text(valor + "\n", encoding="utf-8")
+    monkeypatch.setattr(checker, "DENYLIST_FILE", denylist)
+    return denylist
+
+
+def test_commit_message_with_secret_is_rejected(checker, tmp_path, monkeypatch, capsys):
+    # El caso real: la fuga estaba en el mensaje, no en ningun archivo.
+    _con_denylist(checker, tmp_path, monkeypatch)
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text("La causa: `Xy^Qm*Vb3Nz8` viajaba mal.\n", encoding="utf-8")
+
+    assert checker.main(["--commit-msg", str(msg)]) == 1
+    err = capsys.readouterr().err
+    assert "mensaje de commit" in err
+    assert "Xy^Qm*Vb3Nz8" not in err
+
+
+def test_commit_message_with_encoded_secret_is_rejected(checker, tmp_path, monkeypatch, capsys):
+    _con_denylist(checker, tmp_path, monkeypatch)
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text("viajaba como `Xy%5EQm*Vb3Nz8`, y la camara lo compara.\n", encoding="utf-8")
+
+    assert checker.main(["--commit-msg", str(msg)]) == 1
+    err = capsys.readouterr().err
+    assert "percent-encoded" in err
+    assert "Xy%5EQm*Vb3Nz8" not in err
+
+
+def test_clean_commit_message_passes(checker, tmp_path, monkeypatch):
+    _con_denylist(checker, tmp_path, monkeypatch)
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text("Usa `Aq^Ub*Kx2Zt7` como contrasena de ejemplo.\n", encoding="utf-8")
+
+    assert checker.main(["--commit-msg", str(msg)]) == 0
+
+
+def test_comment_lines_are_ignored(checker, tmp_path, monkeypatch):
+    # Git quita las lineas que empiezan por #, asi que no llegan al mensaje.
+    _con_denylist(checker, tmp_path, monkeypatch)
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text("Titulo normal\n# rama con Xy^Qm*Vb3Nz8 dentro\n", encoding="utf-8")
+
+    assert checker.main(["--commit-msg", str(msg)]) == 0
+
+
+def test_verbose_diff_below_the_scissors_is_ignored(checker, tmp_path, monkeypatch):
+    # Con commit.verbose el diff va debajo de las tijeras y no es el mensaje;
+    # de ese contenido ya se encarga el escaneo de archivos.
+    _con_denylist(checker, tmp_path, monkeypatch)
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "Titulo normal\n"
+        "# ------------------------ >8 ------------------------\n"
+        "+contrasena = Xy^Qm*Vb3Nz8\n",
+        encoding="utf-8",
+    )
+
+    assert checker.main(["--commit-msg", str(msg)]) == 0
+
+
+def test_commit_msg_without_a_file_is_a_usage_error(checker):
+    assert checker.main(["--commit-msg"]) == 2

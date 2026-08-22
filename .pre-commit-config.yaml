@@ -32,3 +32,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        stages: [pre-commit]
+
+      # El mensaje de commit no lo mira nadie más: este escáner sólo ve
+      # `git ls-files` y gitleaks sólo ve los parches. Ahí estuvo la fuga.
+      - id: no-real-camera-data-in-message
+        name: "Sin datos reales en el mensaje de commit"
+        entry: python tools/check_no_secrets.py --commit-msg
+        language: system
+        stages: [commit-msg]

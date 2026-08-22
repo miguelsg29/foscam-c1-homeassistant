@@ -9,6 +9,12 @@ dentro de una URL de ejemplo.
 Uso:
     python tools/check_no_secrets.py          # revisa los archivos versionados
     python tools/check_no_secrets.py ruta ... # revisa rutas concretas
+    python tools/check_no_secrets.py --commit-msg ARCHIVO   # revisa un mensaje
+
+El modo `--commit-msg` existe porque el mensaje de commit era el único canal
+que no miraba nadie: este escáner sólo ve `git ls-files` y gitleaks sólo ve los
+parches. La fuga que motivó todo esto estaba ahí, y sobrevivió a la limpieza de
+los archivos porque un mensaje no se corrige sin reescribir el historial.
 """
 
 from __future__ import annotations
@@ -121,20 +127,94 @@ def denylisted_values() -> list[str]:
     ]
 
 
+#: Git corta aquí cuando `commit.verbose` está activo: lo de abajo es el diff,
+#: no el mensaje, y de eso ya se encarga el escaneo de archivos.
+_TIJERAS = re.compile(r"^#\s*-+\s*>8\s*-+")
+
+AVISO_SIN_DENYLIST = (
+    "AVISO: no hay .secret-values. Los patrones de abajo cazan IPs, puertos y\n"
+    "       URLs con credenciales, pero NO un valor real citado en medio de una\n"
+    "       frase. Copia .secret-values.example a .secret-values y pon ahí tu\n"
+    "       contraseña, tu usuario y tu SSID reales para cerrar ese hueco.\n"
+)
+
+
+def _denylist_hits(line: str, denylist: list[str]) -> list[str]:
+    """Devolver la etiqueta de cada valor prohibido presente en la línea.
+
+    Nunca devuelve el valor, sólo en qué forma apareció: un detector que filtra
+    aquello de lo que avisa no sirve de nada.
+    """
+    vistas = _views(line)
+    etiquetas = []
+    for value in denylist:
+        for etiqueta in (e for v, e in vistas.items() if value in v):
+            etiquetas.append(etiqueta)
+            break
+    return etiquetas
+
+
+def scan_message(path: Path) -> list[str]:
+    """Buscar valores prohibidos en el archivo del mensaje de commit."""
+    denylist = denylisted_values()
+    if not denylist:
+        print(AVISO_SIN_DENYLIST, file=sys.stderr)
+        return []
+    try:
+        texto = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+
+    findings = []
+    for lineno, line in enumerate(texto.splitlines(), start=1):
+        if _TIJERAS.match(line):
+            break
+        # Las líneas de comentario no llegan al mensaje final.
+        if line.startswith("#"):
+            continue
+        findings.extend(
+            f"mensaje de commit, línea {lineno}: [valor-prohibido] Un valor "
+            f"de .secret-values aparece en el mensaje ({etiqueta})."
+            for etiqueta in _denylist_hits(line, denylist)
+        )
+    return findings
+
+
+def _report(findings: list[str], consejo: str) -> int:
+    """Imprimir los hallazgos sin revelar ningún valor."""
+    if not findings:
+        return 0
+    print("Se han encontrado datos que parecen reales:\n", file=sys.stderr)
+    for finding in findings:
+        print(f"  {finding}", file=sys.stderr)
+    print(f"\n{consejo}", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str]) -> int:
     """Ejecutar la comprobación y devolver el código de salida."""
+    if argv and argv[0] == "--commit-msg":
+        if len(argv) < 2:
+            print("Uso: check_no_secrets.py --commit-msg ARCHIVO", file=sys.stderr)
+            return 2
+        findings: list[str] = []
+        for archivo in argv[1:]:
+            findings.extend(scan_message(Path(archivo)))
+        codigo = _report(
+            findings,
+            "Reescribe el mensaje antes de confirmar. Un mensaje ya empujado sólo\n"
+            "se limpia reescribiendo el historial, y eso obliga a un push --force.",
+        )
+        if not codigo:
+            print("OK: el mensaje de commit no contiene valores prohibidos.")
+        return codigo
+
     paths = [Path(a).resolve() for a in argv] if argv else tracked_files()
     findings: list[str] = []
     denylist = denylisted_values()
 
     if not denylist:
-        print(
-            "AVISO: no hay .secret-values. Los patrones de abajo cazan IPs, puertos y\n"
-            "       URLs con credenciales, pero NO un valor real citado en medio de una\n"
-            "       frase. Copia .secret-values.example a .secret-values y pon ahí tu\n"
-            "       contraseña, tu usuario y tu SSID reales para cerrar ese hueco.\n",
-            file=sys.stderr,
-        )
+        print(AVISO_SIN_DENYLIST, file=sys.stderr)
 
     for path in paths:
         if not path.is_file() or path.suffix.lower() in BINARY_SUFFIXES:
@@ -148,15 +228,11 @@ def main(argv: list[str]) -> int:
             continue
 
         for lineno, line in enumerate(text.splitlines(), start=1):
-            # Nunca se imprime lo que ha coincidido: es el secreto.
-            vistas = _views(line) if denylist else {}
-            for value in denylist:
-                for etiqueta in (e for v, e in vistas.items() if value in v):
-                    findings.append(
-                        f"{rel}:{lineno}: [valor-prohibido] Un valor de "
-                        f".secret-values aparece en este archivo ({etiqueta})."
-                    )
-                    break
+            findings.extend(
+                f"{rel}:{lineno}: [valor-prohibido] Un valor de "
+                f".secret-values aparece en este archivo ({etiqueta})."
+                for etiqueta in _denylist_hits(line, denylist)
+            )
             for name, pattern, hint in CHECKS:
                 match = pattern.search(line)
                 if not match:
@@ -166,14 +242,7 @@ def main(argv: list[str]) -> int:
                 findings.append(f"{rel}:{lineno}: [{name}] {hint}\n    {line.strip()[:120]}")
 
     if findings:
-        print("Se han encontrado datos que parecen reales:\n", file=sys.stderr)
-        for finding in findings:
-            print(f"  {finding}", file=sys.stderr)
-        print(
-            "\nSustitúyelos por marcadores antes de hacer commit.",
-            file=sys.stderr,
-        )
-        return 1
+        return _report(findings, "Sustitúyelos por marcadores antes de hacer commit.")
 
     extra = f", {len(denylist)} valores prohibidos" if denylist else ""
     print(f"OK: {len(paths)} archivos revisados{extra}, ningún dato real detectado.")
