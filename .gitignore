@@ -15,8 +15,10 @@ credentials*
 .secret-values
 *_secret*
 *.secret
-# ...pero el propio detector sí se versiona
+# ...pero el propio detector y sus pruebas sí se versionan: `*_secret*` los
+# caza por el nombre, no por el contenido.
 !tools/check_no_secrets.py
+!tests/test_check_no_secrets.py
 
 # Salidas de la herramienta de sondeo: contienen respuestas reales de la cámara
 # (MAC, número de serie, SSID, DDNS...).

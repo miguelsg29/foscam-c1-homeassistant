@@ -13,10 +13,12 @@ Uso:
 
 from __future__ import annotations
 
+import html
 import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,6 +34,28 @@ SELF_EXCLUDE = {
 #: tu SSID... Es la única defensa fiable contra un valor real citado en medio
 #: de una frase, donde ningún patrón genérico lo reconoce como secreto.
 DENYLIST_FILE = ROOT / ".secret-values"
+
+
+def _views(line: str) -> dict[str, str]:
+    """Devolver las lecturas posibles de una línea, empezando por la literal.
+
+    Un secreto no siempre se cita tal cual: dentro de una URL viaja
+    percent-encoded y dentro de un XML o un HTML va escapado. Enumerar las
+    formas en que puede escribirse no funciona, porque cada codificador elige
+    un juego distinto de caracteres seguros: yarl deja `*` intacto y `quote`
+    no, así que la misma contraseña tiene dos formas percent-encoded. Se hace
+    al revés: se deshacen las codificaciones de la línea y se compara siempre
+    contra el valor literal, que es uno solo.
+
+    Pasó de verdad: un mensaje de commit citaba la contraseña y, dos líneas
+    más abajo, su forma `%5E`. Sólo se detectó la primera.
+    """
+    vistas = {line: "literal"}
+    vistas.setdefault(unquote(line), "percent-encoded")
+    vistas.setdefault(html.unescape(line), "escapado como XML/HTML")
+    vistas.setdefault(unquote(html.unescape(line)), "escapado y percent-encoded")
+    return vistas
+
 
 BINARY_SUFFIXES = {
     ".png",
@@ -124,12 +148,15 @@ def main(argv: list[str]) -> int:
             continue
 
         for lineno, line in enumerate(text.splitlines(), start=1):
+            # Nunca se imprime lo que ha coincidido: es el secreto.
+            vistas = _views(line) if denylist else {}
             for value in denylist:
-                if value in line:
+                for etiqueta in (e for v, e in vistas.items() if value in v):
                     findings.append(
                         f"{rel}:{lineno}: [valor-prohibido] Un valor de "
-                        f".secret-values aparece en este archivo."
+                        f".secret-values aparece en este archivo ({etiqueta})."
                     )
+                    break
             for name, pattern, hint in CHECKS:
                 match = pattern.search(line)
                 if not match:
