@@ -187,6 +187,11 @@ informa fuera de rango.
 ## Estado y pendientes
 
 - Publicado en https://github.com/miguelsg29/foscam-c1-homeassistant
+- El logo vive en `custom_components/foscam_c1/brand/`, dentro del paquete.
+  Desde HA 2026.3.0 es ahí donde se buscan y tienen prioridad sobre el CDN de
+  marcas; no hay que abrir ningún PR. En versiones anteriores sale el icono
+  genérico: ver `brands/README.md`. Enlazar al logo de la integración oficial
+  no es posible, los symlinks están prohibidos en `custom_integrations`.
 - CI: hassfest, HACS, ruff, pytest y escaneo de secretos. HACS falla mientras el
   repositorio no tenga *topics* (se ponen en la web, no en el código).
 - El vídeo **ya está dentro**: la plataforma `camera` da la foto fija por CGI y

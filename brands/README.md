@@ -1,33 +1,41 @@
-# Assets para `home-assistant/brands`
+# Logo: dónde vive y por qué aquí no hay imágenes
 
-Home Assistant **no lee el logo de este repositorio**. La interfaz lo pide a
-`brands.home-assistant.io` usando el dominio de la integración, así que mientras
-no exista allí, el icono es el genérico de pieza de puzzle.
+Las imágenes están en **`custom_components/foscam_c1/brand/`**, dentro del
+propio paquete de la integración. Desde Home Assistant **2026.3.0** es ahí donde
+hay que ponerlas, y las locales tienen prioridad sobre las del CDN de marcas:
 
-Estos archivos están generados con las medidas que exige el repositorio de
-marcas y listos para enviar:
+```
+custom_components/foscam_c1/brand/
+├── icon.png        256×256   la marca circular, cuadrada
+├── icon@2x.png     512×512
+├── logo.png        568×128   el wordmark, lado corto 128
+└── logo@2x.png    1135×256   lado corto 256
+```
 
-| Archivo | Tamaño | Qué es |
-| --- | --- | --- |
-| `icon.png` | 256×256 | La marca circular, cuadrada y centrada |
-| `icon@2x.png` | 512×512 | La misma al doble |
-| `logo.png` | 512×115 | El wordmark completo |
-| `logo@2x.png` | 1024×231 | El mismo al doble |
+No hace falta tocar `manifest.json` ni abrir ningún PR. Se copian con la
+integración y aparecen solas.
 
-## Cómo publicarlos
+## Si tu Home Assistant es anterior a 2026.3.0
 
-Es un PR a otro repositorio, así que hay que hacerlo a mano:
+En esas versiones el icono se pide a `brands.home-assistant.io` y una carpeta
+local no se mira, así que sale el icono genérico de pieza de puzzle. Para
+arreglarlo hay que enviar las imágenes al repositorio de marcas:
 
 ```bash
 git clone https://github.com/home-assistant/brands
-cd brands
-mkdir -p custom_integrations/foscam_c1
-cp /ruta/a/este/repo/brands/custom_integrations/foscam_c1/*.png custom_integrations/foscam_c1/
+mkdir -p brands/custom_integrations/foscam_c1
+cp custom_components/foscam_c1/brand/*.png brands/custom_integrations/foscam_c1/
 ```
 
-Y se abre el PR. Sus comprobaciones verifican tamaños y transparencia; por eso
-los archivos ya salen con las medidas exactas.
+Y abrir el PR. Los archivos ya cumplen sus medidas, así que valen tal cual.
 
-El logo es una marca registrada de Foscam. El repositorio de marcas de Home
-Assistant aloja logos de fabricantes justamente para identificar el hardware
-compatible, que es el uso que se le da aquí.
+Dos límites de esa vía, y por eso no es la principal:
+
+* **No se puede enlazar al logo de la integración oficial.** Sería lo natural
+  —el mismo fabricante, el mismo logo, ya está en `core_integrations/foscam`—
+  pero *«symlinks are currently not allowed in the custom integrations folder»*.
+  Compartir imágenes por enlace sólo vale entre integraciones del core.
+* `custom_integrations` está marcada como **carpeta legacy** en ese repositorio.
+
+El logo es una marca registrada de Foscam, usada aquí para identificar el
+hardware compatible.
