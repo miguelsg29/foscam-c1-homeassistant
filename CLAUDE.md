@@ -62,8 +62,10 @@ funciona se memoriza: sondear en cada petición dispararía el bloqueo por
 intentos fallidos.
 
 *Limitación sin arreglo*: si la contraseña lleva cualquiera de los caracteres
-que sí se escapan (`& = + # % " < > \` o un espacio) y el firmware no
-descodifica, no hay forma de enviarla. Hay que cambiarla.
+que sí se escapan (`& = + # % " < > \` o un espacio) o algo fuera del
+ASCII imprimible (una `ñ`, una tilde), y el firmware no descodifica, no hay
+forma de enviarla. Hay que cambiarla. El resto del ASCII imprimible
+—`^ * ! $ @ ~` y demás— viaja tal cual y es seguro.
 
 **2. Escribir la configuración es destructivo.** `setMotionDetectConfig` y
 `setAudioAlarmConfig` devuelven a su valor por defecto todo parámetro que no
