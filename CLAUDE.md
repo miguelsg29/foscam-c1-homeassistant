@@ -130,9 +130,20 @@ Algunas cámaras usan `-3` o un 401 de HTTP donde otras usan `-2`.
 **5. Las cámaras bloquean la cuenta** tras varios intentos fallidos seguidos.
 Cualquier lógica de reintento tiene que ser tacaña.
 
-**6. Las escalas de sensibilidad no son de fiar.** Foscam documenta 0-4 para el
-comando antiguo, pero esta C1 devuelve 6. El `native_max_value` de los `number`
-se amplía dinámicamente para no dejar un valor fuera de rango.
+**6. La sensibilidad del comando antiguo es un enum disfrazado de número.**
+Foscam documenta 0-4, y `SENSITIVITY_LABELS_LEGACY` en `const.py` recoge lo que
+significa cada valor: `0=low, 1=normal, 2=high, 3=lower, 4=lowest`. El orden no
+es el que parece — si esa tabla es correcta, el valor más sensible es el **2** y
+el 4 es el menos sensible, justo lo contrario de lo que sugiere un deslizador
+0-4. La variante moderna sí usa una escala lineal 0-100.
+
+Una versión anterior de esta nota afirmaba que esta C1 devuelve 6 y en eso se
+apoyaba el ensanchado dinámico del `native_max_value`. **La app del fabricante
+llega a 4**, comprobado por el usuario en agosto de 2026, así que el 6 no está
+confirmado y no debe repetirse como un hecho. El ensanchado se queda, pero como
+red por si algún modelo devuelve un valor fuera de rango: evita dejar la entidad
+en estado inválido, y se repliega solo al rango documentado en cuanto la cámara
+vuelve a informar algo dentro de él.
 
 ## Arquitectura
 
