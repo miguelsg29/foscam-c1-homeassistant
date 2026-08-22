@@ -35,12 +35,6 @@ SELF_EXCLUDE = {
     ".github/workflows/secret-scan.yml",
 }
 
-#: Archivo local, ignorado por git, con un valor literal por línea que nunca
-#: debe aparecer en el repositorio: tu contraseña real, tu usuario de la cámara,
-#: tu SSID... Es la única defensa fiable contra un valor real citado en medio
-#: de una frase, donde ningún patrón genérico lo reconoce como secreto.
-DENYLIST_FILE = ROOT / ".secret-values"
-
 
 def _views(line: str) -> dict[str, str]:
     """Devolver las lecturas posibles de una línea, empezando por la literal.
@@ -63,9 +57,12 @@ def _views(line: str) -> dict[str, str]:
     return vistas
 
 
-#: `.env` ya tiene las credenciales reales para `probe_camera.py`. Leerlas de
-#: ahí evita mantener dos archivos en paralelo, que es como se llegó a tener un
-#: `.secret-values` vacío mientras la fuga llevaba dos commits publicada.
+#: La única fuente de valores reales. `.env` ya tiene las credenciales para
+#: `probe_camera.py`, así que se rota en un sitio y el detector se entera solo.
+#: Hubo un `.secret-values` aparte y el resultado fue quedarse vacío mientras la
+#: fuga llevaba dos commits publicada: dos listas que mantener a mano es una
+#: lista que se olvida. Cualquier clave sirve, no sólo las del ejemplo: añade
+#: `FOSCAM_PASSWORD_ANTERIOR` o la de tu router y entran igual.
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE_FILE = ROOT / ".env.example"
 
@@ -197,37 +194,15 @@ def env_values() -> list[str]:
     return valores
 
 
-def all_denied_values() -> list[str]:
-    """Unir los valores de `.env` y `.secret-values`, sin repetir."""
-    vistos: set[str] = set()
-    union: list[str] = []
-    for valor in (*env_values(), *denylisted_values()):
-        if valor not in vistos:
-            vistos.add(valor)
-            union.append(valor)
-    return union
-
-
-def denylisted_values() -> list[str]:
-    """Leer los valores literales prohibidos del archivo local, si existe."""
-    if not DENYLIST_FILE.is_file():
-        return []
-    return [
-        line.strip()
-        for line in DENYLIST_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
-
-
 #: Git corta aquí cuando `commit.verbose` está activo: lo de abajo es el diff,
 #: no el mensaje, y de eso ya se encarga el escaneo de archivos.
 _TIJERAS = re.compile(r"^#\s*-+\s*>8\s*-+")
 
 AVISO_SIN_DENYLIST = (
-    "AVISO: no hay ningún valor con el que comparar (ni .env ni .secret-values).\n"
-    "       Los patrones cazan IPs, puertos y URLs con credenciales, pero NO un\n"
-    "       valor real citado en medio de una frase. Copia .env.example a .env y\n"
-    "       rellénalo para cerrar ese hueco.\n"
+    "AVISO: .env no aporta ningún valor con el que comparar. Los patrones cazan\n"
+    "       IPs, puertos y URLs con credenciales, pero NO un valor real citado en\n"
+    "       medio de una frase. Copia .env.example a .env y rellénalo para cerrar\n"
+    "       ese hueco.\n"
 )
 
 
@@ -248,7 +223,7 @@ def _denylist_hits(line: str, denylist: list[str]) -> list[str]:
 
 def scan_message(path: Path) -> list[str]:
     """Buscar valores prohibidos en el archivo del mensaje de commit."""
-    denylist = all_denied_values()
+    denylist = env_values()
     if not denylist:
         print(AVISO_SIN_DENYLIST, file=sys.stderr)
         return []
@@ -266,7 +241,7 @@ def scan_message(path: Path) -> list[str]:
             continue
         findings.extend(
             f"mensaje de commit, línea {lineno}: [valor-prohibido] Un valor real "
-            f"de .env o .secret-values aparece en el mensaje ({etiqueta})."
+            f"de .env aparece en el mensaje ({etiqueta})."
             for etiqueta in _denylist_hits(line, denylist)
         )
     return findings
@@ -303,7 +278,7 @@ def main(argv: list[str]) -> int:
 
     paths = [Path(a).resolve() for a in argv] if argv else tracked_files()
     findings: list[str] = []
-    denylist = all_denied_values()
+    denylist = env_values()
 
     if not denylist:
         print(AVISO_SIN_DENYLIST, file=sys.stderr)
@@ -322,7 +297,7 @@ def main(argv: list[str]) -> int:
         for lineno, line in enumerate(text.splitlines(), start=1):
             findings.extend(
                 f"{rel}:{lineno}: [valor-prohibido] Un valor real de "
-                f".env o .secret-values aparece en este archivo ({etiqueta})."
+                f".env aparece en este archivo ({etiqueta})."
                 for etiqueta in _denylist_hits(line, denylist)
             )
             for name, pattern, hint in CHECKS:
@@ -336,12 +311,7 @@ def main(argv: list[str]) -> int:
     if findings:
         return _report(findings, "Sustitúyelos por marcadores antes de hacer commit.")
 
-    fuentes = []
-    if env_values():
-        fuentes.append(".env")
-    if denylisted_values():
-        fuentes.append(".secret-values")
-    extra = f", {len(denylist)} valores prohibidos ({' + '.join(fuentes)})" if denylist else ""
+    extra = f", {len(denylist)} valores de .env comparados" if denylist else ""
     print(f"OK: {len(paths)} archivos revisados{extra}, ningún dato real detectado.")
     return 0
 

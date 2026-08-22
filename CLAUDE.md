@@ -22,8 +22,8 @@ Ya pasó una vez: una contraseña real quedó citada dentro de una frase en
 `docs/cgi-referencia.md` como ejemplo, y las dos capas que había entonces
 —gitleaks y los patrones de `tools/check_no_secrets.py`— la dejaron pasar
 porque ambas buscan **patrones** (`usr=`, `pwd=`, IPs) y allí el valor estaba
-suelto en prosa. Por eso existe `.secret-values`: la tercera capa, que compara
-literalmente y es la única que cubre ese caso.
+suelto en prosa. Por eso existe la tercera capa, la que compara literalmente
+contra tus valores reales, y que es la única que cubre ese caso.
 
 Los valores con los que compara salen de **`.env`** (local, ignorado por git),
 que es donde ya están las credenciales para `probe_camera.py`. Se rota ahí y el
@@ -39,8 +39,11 @@ sí avisa, para no dejar un hueco callado. El descarte de marcadores compara de
 forma **exacta** contra `.env.example`: la regex `PLACEHOLDERS` lleva palabras
 genéricas como `usuario` y descartaría un usuario real que la contenga.
 
-`.secret-values` sigue existiendo y se une a `.env` sin repetir, para lo que no
-cabe allí: la contraseña anterior tras rotar, otra cámara, el router.
+Vale cualquier clave de `.env`, no sólo las del ejemplo: si quieres proteger la
+contraseña anterior tras rotar, la de otra cámara o la del router, añade su
+línea. Hubo un `.secret-values` aparte para eso y se retiró: dos listas que
+mantener a mano es una lista que se olvida, y la que se olvidó estaba vacía
+mientras la fuga llevaba dos commits publicada.
 
 Nada de esto corre solo. Hay que instalar los hooks una vez por clon:
 
@@ -50,7 +53,7 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
 Sin eso la única red es CI, y CI salta **después** del push, cuando el secreto
-ya es público. Peor aún: en CI no existe `.secret-values` —es local por
+ya es público. Peor aún: en CI no existe `.env` —es local por
 diseño—, así que allí `check_no_secrets.py` sólo corre los patrones y la capa
 de valores literales **no existe**. Es decir: la comparación contra tus valores
 reales sólo puede ocurrir en tu máquina. Si no instalas los hooks, esa capa no
@@ -73,7 +76,7 @@ Nunca escribas un valor real "solo como ejemplo ilustrativo". Nunca.
 
 ```bash
 ruff check . && ruff format --check .
-pytest -q                      # 40 pruebas, no necesitan Home Assistant
+pytest -q                      # 44 pruebas, no necesitan Home Assistant
 python tools/check_no_secrets.py
 gitleaks detect --config .gitleaks.toml --redact    # si lo tienes instalado
 ```
@@ -99,6 +102,14 @@ que sí se escapan (`& = + # % " < > \` o un espacio) o algo fuera del
 ASCII imprimible (una `ñ`, una tilde), y el firmware no descodifica, no hay
 forma de enviarla. Hay que cambiarla. El resto del ASCII imprimible
 —`^ * ! $ @ ~` y demás— viaja tal cual y es seguro.
+
+**1 bis. El RTSP se codifica justo al revés.** La misma contraseña se escribe
+de dos formas según por dónde salga: literal en el CGI, porque el firmware no
+descodifica; y percent-encoded en la URL RTSP, porque ahí el consumidor es
+ffmpeg, que sí descodifica y espera la userinfo según la RFC 3986. Confundirlas
+da un rechazo de credenciales que parece una contraseña mal escrita. Lo
+construye `FoscamClient.rtsp_url()`, y esa URL lleva la contraseña dentro: no
+se registra en el log ni se expone como atributo.
 
 **2. Escribir la configuración es destructivo.** `setMotionDetectConfig` y
 `setAudioAlarmConfig` devuelven a su valor por defecto todo parámetro que no
@@ -131,7 +142,11 @@ se amplía dinámicamente para no dejar un valor fuera de rango.
   `getDevState` en cada ciclo (5 s), la configuración cada 60 s, la información
   del dispositivo cada 15 min. Al escribir se invalida y se refresca al vuelo.
 - `entity.py` — base con `_attr_has_entity_name`, device info y `unique_id`.
-- Plataformas — todas siguen el mismo patrón: una `EntityDescription` extendida
+- `camera.py` — la excepción al patrón de tablas: una sola entidad, sin
+  `value_fn`. `_attr_name = None` para que tome el nombre del dispositivo, y
+  `CameraEntityFeature.STREAM` sólo si hay puerto RTSP configurado: con el
+  puerto a 0 quedan las fotos fijas y no se ofrece un directo que fallaría.
+- Plataformas — las demás siguen el mismo patrón: una `EntityDescription` extendida
   con `value_fn` / `set_fn`, y una tabla de descripciones. Para añadir una
   entidad, añade una fila a la tabla y su traducción; no hagas subclases.
 - **Capacidades**: `CAPABILITY_PROBES` en `coordinator.py` sondea comandos
@@ -156,6 +171,8 @@ se amplía dinámicamente para no dejar un valor fuera de rango.
 - Publicado en https://github.com/miguelsg29/foscam-c1-homeassistant
 - CI: hassfest, HACS, ruff, pytest y escaneo de secretos. HACS falla mientras el
   repositorio no tenga *topics* (se ponen en la web, no en el código).
-- El vídeo queda fuera de alcance: se usa la integración oficial de Foscam o
-  `generic_camera`.
+- El vídeo **ya está dentro**: la plataforma `camera` da la foto fija por CGI y
+  el directo por RTSP. Estuvo fuera de alcance hasta que se comprobó que la
+  oficial sólo aporta `camera`, `switch` y `number`: mantenerla en paralelo
+  costaba más que las ~70 líneas de `camera.py`.
 - `_to_delete/` son restos de la instalación; se puede borrar.

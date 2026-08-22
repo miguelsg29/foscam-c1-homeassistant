@@ -20,22 +20,32 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .api import FoscamAuthError, FoscamClient, FoscamError
 from .const import (
+    CONF_RTSP_PORT,
     CONF_SCAN_INTERVAL_CONFIG,
     CONF_SCAN_INTERVAL_STATE,
     CONF_SSL,
+    CONF_STREAM,
     CONF_VERIFY_SSL,
     CONF_WEB_URL,
     DEFAULT_PORT_HTTPS,
+    DEFAULT_RTSP_PORT,
     DEFAULT_SCAN_INTERVAL_CONFIG,
     DEFAULT_SCAN_INTERVAL_STATE,
     DEFAULT_SSL,
+    DEFAULT_STREAM,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
     MAX_SCAN_INTERVAL_STATE,
     MIN_SCAN_INTERVAL_STATE,
+    STREAMS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +55,17 @@ class AccountNotAdminError(FoscamError):
     """Las credenciales valen, pero la cuenta no puede leer la detección."""
 
 
+#: El desplegable de flujo. Se traduce por `translation_key`, asi que las
+#: opciones viajan como "Main"/"Sub" —que es lo que espera la URL RTSP— y el
+#: usuario ve "Principal"/"Secundario".
+STREAM_SELECTOR = SelectSelector(
+    SelectSelectorConfig(
+        options=STREAMS,
+        mode=SelectSelectorMode.DROPDOWN,
+        translation_key="stream",
+    )
+)
+
 STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
@@ -53,6 +74,10 @@ STEP_USER_SCHEMA = vol.Schema(
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_SSL, default=DEFAULT_SSL): bool,
         vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
+        vol.Required(CONF_STREAM, default=DEFAULT_STREAM): STREAM_SELECTOR,
+        vol.Required(CONF_RTSP_PORT, default=DEFAULT_RTSP_PORT): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=65535)
+        ),
     }
 )
 
@@ -190,6 +215,16 @@ class FoscamOptionsFlow(OptionsFlow):
                     CONF_VERIFY_SSL,
                     default=current.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
                 ): bool,
+                vol.Required(
+                    CONF_STREAM,
+                    default=current.get(CONF_STREAM, DEFAULT_STREAM),
+                ): STREAM_SELECTOR,
+                # 0 desactiva el directo y deja solo la foto fija, que es lo
+                # util si la camara tiene el RTSP cerrado.
+                vol.Required(
+                    CONF_RTSP_PORT,
+                    default=current.get(CONF_RTSP_PORT, DEFAULT_RTSP_PORT),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=65535)),
                 vol.Optional(CONF_WEB_URL, default=current.get(CONF_WEB_URL, "")): str,
             }
         )

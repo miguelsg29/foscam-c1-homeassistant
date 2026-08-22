@@ -11,7 +11,8 @@ secrets.yml
 *.crt
 *.p12
 credentials*
-# Lista local de valores literales que nunca deben aparecer en el repo
+# Los valores reales viven en .env (arriba). `.secret-values` fue el mecanismo
+# anterior: se sigue ignorando por si queda uno de antes en algun clon.
 .secret-values
 *_secret*
 *.secret

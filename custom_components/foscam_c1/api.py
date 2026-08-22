@@ -343,6 +343,24 @@ class FoscamClient:
         await self.async_set_infra_mode(1)
         await self.async_command(CMD_OPEN_INFRA if on else CMD_CLOSE_INFRA)
 
+    def rtsp_url(self, stream: str, port: int) -> str:
+        """Construir la URL RTSP del flujo indicado.
+
+        Ojo con la codificacion, porque es **la contraria** que en el CGI. Ahi
+        las credenciales viajan literales porque el firmware no descodifica el
+        `%XX` (ver la nota de arriba); aqui el consumidor es ffmpeg, que si
+        descodifica y espera la userinfo percent-encoded segun la RFC 3986. La
+        misma contrasena, por tanto, se escribe de dos formas distintas segun
+        por donde salga, y confundirlas da un fallo de credenciales que parece
+        una contrasena mal escrita.
+
+        La URL lleva la contrasena dentro, asi que no debe registrarse nunca en
+        el log ni exponerse como atributo de una entidad.
+        """
+        user = quote(self._username, safe="")
+        password = quote(self._password, safe="")
+        return f"rtsp://{user}:{password}@{self._host}:{port}/video{stream}"
+
     async def async_snapshot(self) -> bytes:
         """Pedir una foto fija a la cámara."""
         return await self.async_command_raw(CMD_SNAP)

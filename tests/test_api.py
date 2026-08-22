@@ -323,3 +323,41 @@ async def test_alarm_variants_are_detected_independently(api, const):
     assert await client.async_detect_alarm_variant(const.ALARM_MOTION) == const.MOTION_VARIANT_V1
     assert await client.async_detect_alarm_variant(const.ALARM_AUDIO) == const.MOTION_VARIANT_LEGACY
     assert client.motion_variant == const.MOTION_VARIANT_V1
+
+
+def test_rtsp_url_percent_encodes_the_credentials(api):
+    # Es la codificacion CONTRARIA que en el CGI: ahi las credenciales viajan
+    # literales porque el firmware no descodifica, pero aqui el consumidor es
+    # ffmpeg, que si descodifica y espera la userinfo segun la RFC 3986.
+    session = FakeSession()
+    client = api.FoscamClient(
+        session, "192.0.2.10", 443, "camera_user", "Aq^Ub*Kx2Zt7", ssl=True, verify_ssl=False
+    )
+    url = client.rtsp_url("Main", 88)
+    assert url == "rtsp://camera_user:Aq%5EUb%2AKx2Zt7@192.0.2.10:88/videoMain"
+
+
+def test_rtsp_url_escapes_what_would_break_the_authority(api):
+    # Una `@` o unos `:` sin escapar partirian la userinfo y el host.
+    session = FakeSession()
+    client = api.FoscamClient(
+        session, "192.0.2.10", 443, "us:er", "a@b/c", ssl=True, verify_ssl=False
+    )
+    url = client.rtsp_url("Sub", 554)
+    assert url == "rtsp://us%3Aer:a%40b%2Fc@192.0.2.10:554/videoSub"
+
+
+def test_rtsp_url_uses_the_requested_stream_and_port(api):
+    session = FakeSession()
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert client.rtsp_url("Main", 65534).endswith(":65534/videoMain")
+    assert client.rtsp_url("Sub", 88).endswith(":88/videoSub")
+
+
+def test_rtsp_url_is_independent_of_the_cgi_scheme(api):
+    # El RTSP no va por HTTPS aunque el CGI si: son puertos y protocolos
+    # distintos, y confundirlos daba una URL que ffmpeg no abre.
+    session = FakeSession()
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert client.rtsp_url("Main", 88).startswith("rtsp://")
+    assert client.base_url.startswith("https://")

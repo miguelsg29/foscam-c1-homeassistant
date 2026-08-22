@@ -10,11 +10,15 @@
           "username": "Username",
           "password": "Password",
           "ssl": "Use HTTPS",
-          "verify_ssl": "Verify the TLS certificate"
+          "verify_ssl": "Verify the TLS certificate",
+          "stream": "Stream",
+          "rtsp_port": "RTSP port"
         },
         "data_description": {
           "port": "The CGI port, not the web panel port. They are often different.",
-          "verify_ssl": "Foscam cameras ship a self-signed certificate, so leave this off unless you installed your own."
+          "verify_ssl": "Foscam cameras ship a self-signed certificate, so leave this off unless you installed your own.",
+          "stream": "Which video feed to pull. Main is sharper; Sub is easier on a weak network.",
+          "rtsp_port": "Port for the live video. Newer models accept 88 and 554, older ones 88 and 65534. Set it to 0 if the camera has RTSP disabled: stills keep working and the live view is simply not offered."
         }
       },
       "reauth_confirm": {
@@ -44,11 +48,15 @@
           "scan_interval_state": "Live state polling (seconds)",
           "scan_interval_config": "Settings polling (seconds)",
           "verify_ssl": "Verify the TLS certificate",
+          "stream": "Stream",
+          "rtsp_port": "RTSP port",
           "web_url": "Web panel URL"
         },
         "data_description": {
           "scan_interval_state": "How often motion, SD card and Wi-Fi state are read. Lower is more responsive but hits the camera harder.",
-          "web_url": "Optional. Shown as the device's 'Visit' link, useful when the web panel listens on a different port than the CGI API."
+          "web_url": "Optional. Shown as the device's 'Visit' link, useful when the web panel listens on a different port than the CGI API.",
+          "stream": "Which video feed to pull. Main is sharper; Sub is easier on a weak network.",
+          "rtsp_port": "Port for the live video. Newer models accept 88 and 554, older ones 88 and 65534. Set it to 0 if the camera has RTSP disabled: stills keep working and the live view is simply not offered."
         }
       }
     }
@@ -258,5 +266,13 @@
       }
     }
   },
-  "exceptions": {}
+  "exceptions": {},
+  "selector": {
+    "stream": {
+      "options": {
+        "Main": "Main",
+        "Sub": "Sub"
+      }
+    }
+  }
 }

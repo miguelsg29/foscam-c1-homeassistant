@@ -56,9 +56,7 @@ def test_literal_line_is_always_the_first_view(checker):
 
 
 def test_encoded_secret_in_a_file_is_caught(checker, tmp_path, monkeypatch, capsys):
-    denylist = tmp_path / ".secret-values"
-    denylist.write_text("# comentario\nXy^Qm*Vb3Nz8\n", encoding="utf-8")
-    monkeypatch.setattr(checker, "DENYLIST_FILE", denylist)
+    _con_denylist(checker, tmp_path, monkeypatch)
 
     sospechoso = tmp_path / "mensaje.txt"
     sospechoso.write_text("la contraseña viajaba como Xy%5EQm*Vb3Nz8\n", encoding="utf-8")
@@ -73,9 +71,7 @@ def test_encoded_secret_in_a_file_is_caught(checker, tmp_path, monkeypatch, caps
 
 
 def test_clean_file_passes(checker, tmp_path, monkeypatch):
-    denylist = tmp_path / ".secret-values"
-    denylist.write_text("Xy^Qm*Vb3Nz8\n", encoding="utf-8")
-    monkeypatch.setattr(checker, "DENYLIST_FILE", denylist)
+    _con_denylist(checker, tmp_path, monkeypatch)
 
     limpio = tmp_path / "limpio.md"
     limpio.write_text("host 192.0.2.10, puerto 443, usuario camera_user\n", encoding="utf-8")
@@ -83,21 +79,16 @@ def test_clean_file_passes(checker, tmp_path, monkeypatch):
     assert checker.main([str(limpio)]) == 0
 
 
-def _con_denylist(checker, tmp_path, monkeypatch, valor="Xy^Qm*Vb3Nz8"):
-    denylist = tmp_path / ".secret-values"
-    denylist.write_text(valor + "\n", encoding="utf-8")
-    monkeypatch.setattr(checker, "DENYLIST_FILE", denylist)
-    # Aislar tambien .env: sin esto las pruebas leerian el del repositorio.
-    monkeypatch.setattr(checker, "ENV_FILE", tmp_path / ".env")
-    return denylist
-
-
 def _con_env(checker, tmp_path, monkeypatch, contenido):
+    """Montar un .env aislado: sin esto las pruebas leerian el del repositorio."""
     env = tmp_path / ".env"
     env.write_text(contenido, encoding="utf-8")
     monkeypatch.setattr(checker, "ENV_FILE", env)
-    monkeypatch.setattr(checker, "DENYLIST_FILE", tmp_path / ".secret-values")
     return env
+
+
+def _con_denylist(checker, tmp_path, monkeypatch, valor="Xy^Qm*Vb3Nz8"):
+    return _con_env(checker, tmp_path, monkeypatch, f"FOSCAM_PASSWORD={valor}\n")
 
 
 def test_commit_message_with_secret_is_rejected(checker, tmp_path, monkeypatch, capsys):
@@ -161,11 +152,11 @@ def test_commit_msg_without_a_file_is_a_usage_error(checker):
 
 def test_env_password_becomes_a_denied_value(checker, tmp_path, monkeypatch):
     _con_env(checker, tmp_path, monkeypatch, "FOSCAM_PASSWORD=Xy^Qm*Vb3Nz8\n")
-    assert checker.all_denied_values() == ["Xy^Qm*Vb3Nz8"]
+    assert checker.env_values() == ["Xy^Qm*Vb3Nz8"]
 
 
 def test_env_secret_is_caught_in_a_file(checker, tmp_path, monkeypatch, capsys):
-    # Rotar en .env basta: no hay que acordarse de tocar .secret-values.
+    # Rotar en .env basta: no hay un segundo archivo que recordar.
     _con_env(checker, tmp_path, monkeypatch, "FOSCAM_PASSWORD=Xy^Qm*Vb3Nz8\n")
     doc = tmp_path / "doc.md"
     doc.write_text("la contrasena es Xy^Qm*Vb3Nz8 por ejemplo\n", encoding="utf-8")
@@ -183,7 +174,7 @@ def test_host_and_port_are_not_denied(checker, tmp_path, monkeypatch):
         monkeypatch,
         "FOSCAM_HOST=camara.example.net\nFOSCAM_PORT=44344\nFOSCAM_PASSWORD=Xy^Qm*Vb3Nz8\n",
     )
-    assert checker.all_denied_values() == ["Xy^Qm*Vb3Nz8"]
+    assert checker.env_values() == ["Xy^Qm*Vb3Nz8"]
 
 
 def test_untouched_example_env_adds_nothing(checker, tmp_path, monkeypatch):
@@ -194,13 +185,13 @@ def test_untouched_example_env_adds_nothing(checker, tmp_path, monkeypatch):
         monkeypatch,
         "FOSCAM_HOST=192.0.2.10\nFOSCAM_USER=camera_user\nFOSCAM_PASSWORD=\n",
     )
-    assert checker.all_denied_values() == []
+    assert checker.env_values() == []
 
 
 def test_short_value_is_skipped_but_announced(checker, tmp_path, monkeypatch, capsys):
     # Un hueco silencioso es justo el fallo que hay que evitar.
     _con_env(checker, tmp_path, monkeypatch, "FOSCAM_SSID=casa\n")
-    assert checker.all_denied_values() == []
+    assert checker.env_values() == []
     assert "FOSCAM_SSID" in capsys.readouterr().err
 
 
@@ -211,18 +202,21 @@ def test_quotes_and_comments_are_handled(checker, tmp_path, monkeypatch):
         monkeypatch,
         '# un comentario\nFOSCAM_PASSWORD="Xy^Qm*Vb3Nz8"\nSIN_IGUAL\n',
     )
-    assert checker.all_denied_values() == ["Xy^Qm*Vb3Nz8"]
+    assert checker.env_values() == ["Xy^Qm*Vb3Nz8"]
 
 
-def test_env_and_secret_values_are_merged_without_repeats(checker, tmp_path, monkeypatch):
-    env = tmp_path / ".env"
-    env.write_text("FOSCAM_PASSWORD=Xy^Qm*Vb3Nz8\n", encoding="utf-8")
-    denylist = tmp_path / ".secret-values"
-    denylist.write_text("Xy^Qm*Vb3Nz8\nMiWifi_De_Casa\n", encoding="utf-8")
-    monkeypatch.setattr(checker, "ENV_FILE", env)
-    monkeypatch.setattr(checker, "DENYLIST_FILE", denylist)
-
-    assert checker.all_denied_values() == ["Xy^Qm*Vb3Nz8", "MiWifi_De_Casa"]
+def test_every_key_counts_not_just_the_documented_ones(checker, tmp_path, monkeypatch):
+    # Cualquier clave sirve: la contrasena anterior tras rotar, el router, una
+    # segunda camara. Era lo unico para lo que hacia falta un archivo aparte.
+    _con_env(
+        checker,
+        tmp_path,
+        monkeypatch,
+        "FOSCAM_PASSWORD=Xy^Qm*Vb3Nz8\n"
+        "FOSCAM_PASSWORD_ANTERIOR=LaDeAntes_9\n"
+        "ROUTER_PASSWORD=OtraMasLarga_7\n",
+    )
+    assert checker.env_values() == ["Xy^Qm*Vb3Nz8", "LaDeAntes_9", "OtraMasLarga_7"]
 
 
 def test_env_secret_is_caught_in_a_commit_message(checker, tmp_path, monkeypatch, capsys):
@@ -240,7 +234,7 @@ def test_value_containing_a_placeholder_word_is_not_skipped(checker, tmp_path, m
     # quedaria fuera del denylist sin avisar. Por eso se compara de forma
     # exacta contra los valores de .env.example.
     _con_env(checker, tmp_path, monkeypatch, "FOSCAM_USER=usuario_real_de_la_camara\n")
-    assert checker.all_denied_values() == ["usuario_real_de_la_camara"]
+    assert checker.env_values() == ["usuario_real_de_la_camara"]
 
 
 def test_example_placeholders_are_matched_exactly(checker, tmp_path, monkeypatch):
@@ -252,4 +246,4 @@ def test_example_placeholders_are_matched_exactly(checker, tmp_path, monkeypatch
         monkeypatch,
         "FOSCAM_USER=camera_user\nFOSCAM_SSID=camera_user_de_verdad\n",
     )
-    assert checker.all_denied_values() == ["camera_user_de_verdad"]
+    assert checker.env_values() == ["camera_user_de_verdad"]

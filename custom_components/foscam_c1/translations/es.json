@@ -10,11 +10,15 @@
           "username": "Usuario",
           "password": "Contraseña",
           "ssl": "Usar HTTPS",
-          "verify_ssl": "Verificar el certificado TLS"
+          "verify_ssl": "Verificar el certificado TLS",
+          "stream": "Flujo de vídeo",
+          "rtsp_port": "Puerto RTSP"
         },
         "data_description": {
           "port": "El puerto de la API CGI, no el del panel web. Suelen ser distintos.",
-          "verify_ssl": "Las Foscam traen un certificado autofirmado, así que déjalo desactivado salvo que hayas instalado el tuyo."
+          "verify_ssl": "Las Foscam traen un certificado autofirmado, así que déjalo desactivado salvo que hayas instalado el tuyo.",
+          "stream": "Qué flujo se usa. El principal se ve mejor; el secundario aguanta mejor una red pobre.",
+          "rtsp_port": "Puerto del vídeo en directo. Los modelos nuevos admiten 88 y 554; los antiguos, 88 y 65534. Ponlo a 0 si la cámara tiene el RTSP desactivado: las fotos fijas siguen funcionando y el directo simplemente no se ofrece."
         }
       },
       "reauth_confirm": {
@@ -44,11 +48,15 @@
           "scan_interval_state": "Sondeo del estado en vivo (segundos)",
           "scan_interval_config": "Sondeo de la configuración (segundos)",
           "verify_ssl": "Verificar el certificado TLS",
+          "stream": "Flujo de vídeo",
+          "rtsp_port": "Puerto RTSP",
           "web_url": "URL del panel web"
         },
         "data_description": {
           "scan_interval_state": "Cada cuánto se leen el movimiento, la tarjeta SD y el wifi. Menos segundos es más reactivo pero castiga más a la cámara.",
-          "web_url": "Opcional. Aparece como el enlace «Visitar» del dispositivo; útil porque el panel web suele estar en un puerto distinto al de la API CGI."
+          "web_url": "Opcional. Aparece como el enlace «Visitar» del dispositivo; útil porque el panel web suele estar en un puerto distinto al de la API CGI.",
+          "stream": "Qué flujo se usa. El principal se ve mejor; el secundario aguanta mejor una red pobre.",
+          "rtsp_port": "Puerto del vídeo en directo. Los modelos nuevos admiten 88 y 554; los antiguos, 88 y 65534. Ponlo a 0 si la cámara tiene el RTSP desactivado: las fotos fijas siguen funcionando y el directo simplemente no se ofrece."
         }
       }
     }
@@ -258,5 +266,13 @@
       }
     }
   },
-  "exceptions": {}
+  "exceptions": {},
+  "selector": {
+    "stream": {
+      "options": {
+        "Main": "Principal",
+        "Sub": "Secundario"
+      }
+    }
+  }
 }

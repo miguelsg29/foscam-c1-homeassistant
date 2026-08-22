@@ -12,6 +12,7 @@ CONF_VERIFY_SSL: Final = "verify_ssl"
 CONF_SCAN_INTERVAL_STATE: Final = "scan_interval_state"
 CONF_SCAN_INTERVAL_CONFIG: Final = "scan_interval_config"
 CONF_STREAM: Final = "stream"
+CONF_RTSP_PORT: Final = "rtsp_port"
 CONF_WEB_URL: Final = "web_url"
 
 DEFAULT_PORT_HTTPS: Final = 443
@@ -22,6 +23,16 @@ DEFAULT_SCAN_INTERVAL_STATE: Final = 5
 DEFAULT_SCAN_INTERVAL_CONFIG: Final = 60
 DEFAULT_INFO_INTERVAL: Final = 900
 DEFAULT_TIMEOUT: Final = 10
+
+# El flujo principal da mas calidad; el secundario aguanta mejor una red pobre.
+STREAM_MAIN: Final = "Main"
+STREAM_SUB: Final = "Sub"
+STREAMS: Final = [STREAM_MAIN, STREAM_SUB]
+DEFAULT_STREAM: Final = STREAM_MAIN
+
+# Los modelos nuevos admiten RTSP en 88 y 554; los antiguos, en 88 y 65534.
+# El 88 es el unico comun a todos, asi que es el valor por defecto.
+DEFAULT_RTSP_PORT: Final = 88
 
 MIN_SCAN_INTERVAL_STATE: Final = 2
 MAX_SCAN_INTERVAL_STATE: Final = 300

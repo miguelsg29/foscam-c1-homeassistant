@@ -1,3 +1,5 @@
+<img src="logo.png" alt="Foscam" width="260">
+
 # Foscam C1 (CGI) para Home Assistant
 
 Integración personalizada para cámaras Foscam que hablan la API `CGIProxy.fcgi`
@@ -32,6 +34,7 @@ que esta integración resuelve:
 
 | Plataforma | Entidad | Notas |
 | --- | --- | --- |
+| `camera` | La cámara | Foto fija por CGI y directo por RTSP. Flujo y puerto configurables; con el puerto a 0 quedan sólo las fotos |
 | `switch` | Detección de movimiento | Lee el estado en vivo de `getDevState`, así que responde en segundos |
 | `switch` | Detección de sonido | Igual que la de movimiento, en los modelos que la soportan |
 | `switch` | LED infrarrojo | Sólo si el modelo responde a `getInfraLedConfig` |
@@ -157,9 +160,9 @@ Cuatro capas lo impiden:
    ```
 
    Rotas las credenciales en `.env` y el detector se entera solo; no hay un
-   segundo archivo que recordar. (`.secret-values` sigue existiendo, opcional,
-   para valores sueltos que no caben en `.env`: la contraseña anterior, otra
-   cámara, el router.)
+   segundo archivo que recordar. Vale cualquier clave, no sólo las del ejemplo:
+   añade una línea para la contraseña del router o la de otra cámara y entra
+   igual.
 3. **`tools/check_no_secrets.py`** — falla si encuentra una IP privada, un
    `usr=`/`pwd=` con valor real o un puerto no estándar en una URL.
 4. **gitleaks** — con reglas propias en `.gitleaks.toml`, tanto en `pre-commit`
