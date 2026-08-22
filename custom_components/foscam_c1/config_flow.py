@@ -40,6 +40,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class AccountNotAdminError(FoscamError):
+    """Las credenciales valen, pero la cuenta no puede leer la detección."""
+
+
 STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
@@ -66,10 +71,17 @@ async def _async_validate(hass, data: Mapping[str, Any]) -> dict[str, str]:
         ssl=data.get(CONF_SSL, DEFAULT_SSL),
         verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
     )
+    # Primero, ¿valen las credenciales? getDevInfo es la comprobación más
+    # barata, y que falle significa inequívocamente usuario o contraseña.
     info = await client.async_get_dev_info()
-    # La detección de movimiento requiere privilegios de administrador; lo
-    # comprobamos ahora para no fallar más tarde con entidades a medias.
-    await client.async_detect_motion_variant()
+
+    # Después, ¿es la cuenta de administrador? Sin ese permiso media
+    # integración quedaría inservible, así que es mejor avisar ahora que
+    # dejar entidades a medias.
+    try:
+        await client.async_detect_motion_variant()
+    except FoscamAuthError as err:
+        raise AccountNotAdminError(str(err)) from err
     return info
 
 
@@ -85,6 +97,8 @@ class FoscamConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await _async_validate(self.hass, user_input)
+            except AccountNotAdminError:
+                errors["base"] = "no_admin"
             except FoscamAuthError:
                 errors["base"] = "invalid_auth"
             except FoscamError:
@@ -123,6 +137,8 @@ class FoscamConfigFlow(ConfigFlow, domain=DOMAIN):
             candidate = {**entry.data, **user_input}
             try:
                 await _async_validate(self.hass, candidate)
+            except AccountNotAdminError:
+                errors["base"] = "no_admin"
             except FoscamAuthError:
                 errors["base"] = "invalid_auth"
             except FoscamError:

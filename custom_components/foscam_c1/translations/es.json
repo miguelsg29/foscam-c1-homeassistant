@@ -27,7 +27,8 @@
     },
     "error": {
       "cannot_connect": "No se ha podido contactar con la cámara. Revisa la dirección, el puerto y si HTTPS es correcto.",
-      "invalid_auth": "La cámara ha rechazado esas credenciales, o la cuenta no es de administrador.",
+      "invalid_auth": "La cámara ha rechazado esas credenciales. Revisa el usuario y la contraseña; si fallas varias veces seguidas, algunas Foscam bloquean la cuenta unos minutos.",
+      "no_admin": "Las credenciales son válidas, pero esta cuenta no puede leer los ajustes de detección de movimiento. Usa una cuenta con privilegios de administrador en la cámara.",
       "unknown": "Error inesperado."
     },
     "abort": {

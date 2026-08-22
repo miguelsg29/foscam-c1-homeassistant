@@ -27,7 +27,8 @@
     },
     "error": {
       "cannot_connect": "Could not reach the camera. Check the address, the port and whether HTTPS is right.",
-      "invalid_auth": "The camera rejected those credentials, or the account is not an administrator.",
+      "invalid_auth": "The camera rejected those credentials. Check the username and password; after several failed attempts some Foscam cameras lock the account for a few minutes.",
+      "no_admin": "The credentials are valid, but this account cannot read the motion detection settings. Use an account with administrator privileges on the camera.",
       "unknown": "Unexpected error."
     },
     "abort": {

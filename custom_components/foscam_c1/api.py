@@ -50,8 +50,20 @@ RESULT_MESSAGES: dict[int, str] = {
 #: Códigos que significan «este firmware no soporta el comando».
 UNSUPPORTED_RESULTS = {-1, -4, -7, -8}
 
+#: Códigos de rechazo. -2 es «usuario o contraseña incorrectos»; -3 es
+#: «la cuenta existe pero no tiene privilegios para este comando».
+AUTH_RESULTS = {-2, -3}
+
 # Sólo elementos hoja: así el envoltorio <CGI_Result> no se traga el documento.
 _TAG_RE = re.compile(r"<([A-Za-z_][\w.\-]*)>([^<]*)</\1>")
+
+
+def _result_code(data: dict[str, str]) -> int:
+    """Leer el campo <result>; su ausencia se trata como éxito."""
+    try:
+        return int(str(data.get("result", "0")).strip())
+    except (TypeError, ValueError):
+        return 0
 
 
 class FoscamError(Exception):
@@ -63,7 +75,22 @@ class FoscamConnectionError(FoscamError):
 
 
 class FoscamAuthError(FoscamError):
-    """Usuario o contraseña incorrectos, o privilegios insuficientes."""
+    """La cámara ha rechazado la petición por credenciales o privilegios."""
+
+    def __init__(self, message: str, code: int | None = None) -> None:
+        """Guardar el código de rechazo, si lo hay."""
+        self.code = code
+        super().__init__(message)
+
+    @property
+    def is_privilege_error(self) -> bool:
+        """Indicar si el rechazo es por privilegios y no por contraseña.
+
+        La cámara distingue entre «esta contraseña no vale» (-2) y «esta cuenta
+        no puede ejecutar este comando» (-3). Para el usuario son dos problemas
+        muy distintos, así que no los mezclamos.
+        """
+        return self.code == -3
 
 
 class FoscamCommandError(FoscamError):
@@ -81,6 +108,31 @@ class FoscamCommandError(FoscamError):
     def unsupported(self) -> bool:
         """Indicar si el código sugiere que el firmware no soporta el comando."""
         return self.code in UNSUPPORTED_RESULTS
+
+
+#: Cómo se escriben `usr` y `pwd` dentro de la URL.
+#:
+#: `literal` es lo que hacen curl y la barra de direcciones del navegador:
+#: escapar sólo lo que rompería la propia URL (`&`, `=`, `+`, `#`, `%`, el
+#: espacio y unos pocos caracteres que aiohttp no acepta en crudo) y dejar el
+#: resto tal cual. Muchos firmwares de Foscam **no descodifican** el `%XX` de
+#: estos dos parámetros, así que una contraseña con `^` enviada como `%5E`
+#: llega a la cámara como una contraseña distinta y el acceso se rechaza.
+#:
+#: `encoded` es la codificación porcentual completa y estándar. Se prueba
+#: después, por si algún firmware sí la espera.
+CREDENTIAL_MODE_LITERAL = "literal"
+CREDENTIAL_MODE_ENCODED = "encoded"
+_CREDENTIAL_MODES = (CREDENTIAL_MODE_LITERAL, CREDENTIAL_MODE_ENCODED)
+
+#: Todo el ASCII imprimible salvo lo que rompería la URL. El espacio y los
+#: caracteres de control quedan fuera del rango y sí se escapan.
+_LITERAL_SAFE = "".join(chr(code) for code in range(33, 127) if chr(code) not in '&=+#%"<>\\')
+
+
+def _literal(value: str) -> str:
+    """Escapar sólo lo imprescindible, como haría curl."""
+    return quote(value, safe=_LITERAL_SAFE)
 
 
 def _parse_response(body: str) -> dict[str, str]:
@@ -129,10 +181,10 @@ class FoscamClient:
         self._verify_ssl = verify_ssl
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._lock = asyncio.Lock()
-        #: Algunos firmwares no descodifican el porcentaje en usr/pwd. Si la
-        #: autenticación falla con credenciales codificadas lo reintentamos en
-        #: crudo una vez y recordamos qué modo funciona.
-        self._raw_credentials = False
+        #: Cómo se escriben usr y pwd en la URL. Empezamos por el modo
+        #: «literal», que es el que usan curl y la barra del navegador y el
+        #: único que funciona en muchos firmwares. Ver _CREDENTIAL_MODES.
+        self._credential_mode: str | None = None
         self._motion_variant: str | None = None
 
     # -- Propiedades ------------------------------------------------------------
@@ -150,24 +202,24 @@ class FoscamClient:
 
     # -- Capa de transporte -----------------------------------------------------
 
-    def _build_url(self, cmd: str, params: dict[str, Any], raw_creds: bool) -> URL:
-        """Construir la URL completa de la petición."""
-        query = {"cmd": cmd, **{k: str(v) for k, v in params.items()}}
-        if raw_creds:
-            # Codificamos todo menos las credenciales, que van tal cual.
-            parts = [f"{quote(k, safe='')}={quote(str(v), safe='')}" for k, v in query.items()]
-            parts.append(f"usr={self._username}")
-            parts.append(f"pwd={self._password}")
-            return URL(f"{self.base_url}{CGI_PATH}?{'&'.join(parts)}", encoded=True)
-        query["usr"] = self._username
-        query["pwd"] = self._password
-        return URL(f"{self.base_url}{CGI_PATH}").with_query(query)
+    def _build_url(self, cmd: str, params: dict[str, Any], mode: str) -> URL:
+        """Construir la URL completa de la petición.
 
-    async def _request(
-        self, cmd: str, params: dict[str, Any], raw_creds: bool
-    ) -> tuple[bytes, str]:
+        Los parámetros del comando siempre van con codificación porcentual
+        normal; lo único que cambia entre modos es cómo se escriben `usr` y
+        `pwd`, porque es ahí donde los firmwares antiguos se atragantan.
+        """
+        query = {"cmd": cmd, **{k: str(v) for k, v in params.items()}}
+        quoter = _literal if mode == CREDENTIAL_MODE_LITERAL else (lambda v: quote(v, safe=""))
+
+        parts = [f"{quote(k, safe='')}={quote(str(v), safe='')}" for k, v in query.items()]
+        parts.append(f"usr={quoter(self._username)}")
+        parts.append(f"pwd={quoter(self._password)}")
+        return URL(f"{self.base_url}{CGI_PATH}?{'&'.join(parts)}", encoded=True)
+
+    async def _request(self, cmd: str, params: dict[str, Any], mode: str) -> tuple[bytes, str]:
         """Ejecutar la petición HTTP y devolver (cuerpo, content-type)."""
-        url = self._build_url(cmd, params, raw_creds)
+        url = self._build_url(cmd, params, mode)
         try:
             async with self._session.get(
                 url,
@@ -178,58 +230,89 @@ class FoscamClient:
                 return await response.read(), response.headers.get("Content-Type", "")
         except aiohttp.ClientResponseError as err:
             if err.status in (401, 403):
-                raise FoscamAuthError(
-                    f"La cámara rechazó las credenciales (HTTP {err.status})"
-                ) from err
+                raise FoscamAuthError(f"La cámara rechazó '{cmd}' con HTTP {err.status}") from err
             raise FoscamConnectionError(f"La cámara respondió HTTP {err.status} a '{cmd}'") from err
         except (TimeoutError, aiohttp.ClientError, OSError) as err:
             raise FoscamConnectionError(
                 f"No se pudo contactar con la cámara en {self.base_url}: {err}"
             ) from err
 
+    async def _attempt(
+        self, cmd: str, params: dict[str, Any], mode: str
+    ) -> tuple[dict[str, str], FoscamAuthError | None]:
+        """Probar un modo de credenciales.
+
+        Devuelve (datos, error). El error sólo se rellena cuando la cámara
+        contesta con un 401/403 de HTTP, que es un rechazo tan válido como un
+        `<result>` negativo y también merece que probemos el otro modo.
+        """
+        try:
+            body, _ = await self._request(cmd, params, mode)
+        except FoscamAuthError as err:
+            return {}, err
+        return _parse_response(body.decode("utf-8", errors="replace")), None
+
     async def async_command(self, cmd: str, params: dict[str, Any] | None = None) -> dict[str, str]:
         """Ejecutar un comando CGI y devolver sus campos como diccionario.
 
-        Lanza FoscamCommandError si <result> no es 0.
+        Lanza FoscamAuthError si la cámara rechaza las credenciales o los
+        privilegios, y FoscamCommandError para cualquier otro <result> distinto
+        de 0.
         """
         params = params or {}
         _LOGGER.debug("Foscam -> %s (params: %s)", cmd, sorted(params))
 
         async with self._lock:
-            body, _ = await self._request(cmd, params, self._raw_credentials)
-            data = _parse_response(body.decode("utf-8", errors="replace"))
+            # Una vez sabemos qué modo entiende esta cámara, no volvemos a
+            # probar el otro: cada rechazo cuenta para el bloqueo por intentos
+            # fallidos que aplican estos firmwares.
+            candidates = (self._credential_mode,) if self._credential_mode else _CREDENTIAL_MODES
+            data: dict[str, str] = {}
+            http_error: FoscamAuthError | None = None
 
-            if data.get("result") == "-2" and not self._raw_credentials:
-                # Reintento con credenciales sin codificar (firmwares antiguos).
-                _LOGGER.debug("Autenticación rechazada; reintentando con credenciales en crudo")
-                body, _ = await self._request(cmd, params, True)
-                retry = _parse_response(body.decode("utf-8", errors="replace"))
-                if retry.get("result") != "-2":
-                    self._raw_credentials = True
-                    data = retry
+            for index, mode in enumerate(candidates):
+                data, http_error = await self._attempt(cmd, params, mode)
+                rejected = http_error is not None or _result_code(data) in AUTH_RESULTS
+                if not rejected:
+                    if self._credential_mode != mode:
+                        _LOGGER.debug("Credenciales aceptadas en modo '%s'", mode)
+                        self._credential_mode = mode
+                    break
+                if index + 1 < len(candidates):
+                    _LOGGER.debug("'%s' rechazado en modo '%s'; probando el siguiente", cmd, mode)
 
-        try:
-            result = int(data.get("result", "0"))
-        except ValueError:
-            result = 0
+            if http_error is not None:
+                raise http_error
 
-        if result == -2 or result == -3:
-            raise FoscamAuthError(f"'{cmd}': {RESULT_MESSAGES.get(result, 'acceso denegado')}")
-        if result != 0:
-            raise FoscamCommandError(cmd, result)
+        code = _result_code(data)
+
+        if code in AUTH_RESULTS:
+            _LOGGER.warning("La cámara rechazó '%s' con result=%s", cmd, code)
+            raise FoscamAuthError(f"'{cmd}': {RESULT_MESSAGES.get(code, 'acceso denegado')}", code)
+        if code != 0:
+            raise FoscamCommandError(cmd, code)
 
         data.pop("result", None)
         return data
 
     async def async_command_raw(self, cmd: str, params: dict[str, Any] | None = None) -> bytes:
         """Ejecutar un comando que devuelve binario (por ejemplo una foto)."""
+        # Antes de pedir binario nos aseguramos de saber qué modo de
+        # credenciales entiende la cámara, para no gastar aquí un intento.
+        mode = self._credential_mode
+        if mode is None:
+            await self.async_command(CMD_GET_DEV_STATE)
+            mode = self._credential_mode or CREDENTIAL_MODE_LITERAL
+
         async with self._lock:
-            body, content_type = await self._request(cmd, params or {}, self._raw_credentials)
+            body, content_type = await self._request(cmd, params or {}, mode)
         if "xml" in content_type or body.lstrip()[:1] == b"<":
             data = _parse_response(body.decode("utf-8", errors="replace"))
-            code = int(data.get("result", "-7") or -7)
-            if code == -2:
-                raise FoscamAuthError(f"'{cmd}': usuario o contraseña incorrectos")
+            code = _result_code(data) or -7
+            if code in AUTH_RESULTS:
+                raise FoscamAuthError(
+                    f"'{cmd}': {RESULT_MESSAGES.get(code, 'acceso denegado')}", code
+                )
             raise FoscamCommandError(cmd, code)
         return body
 
@@ -270,6 +353,8 @@ class FoscamClient:
         """Averiguar qué API de detección de movimiento soporta este firmware."""
         if self._motion_variant is not None:
             return self._motion_variant
+
+        privilege_error: FoscamAuthError | None = None
         for cmd, variant in (
             (CMD_GET_MOTION1, MOTION_VARIANT_V1),
             (CMD_GET_MOTION, MOTION_VARIANT_LEGACY),
@@ -280,12 +365,23 @@ class FoscamClient:
                 if err.unsupported:
                     continue
                 raise
+            except FoscamAuthError as err:
+                if err.is_privilege_error:
+                    # Un -3 aquí es ambiguo: puede ser que este firmware no
+                    # implemente el comando, o que la cuenta no sea de
+                    # administrador. Probamos la otra variante antes de decidir.
+                    privilege_error = err
+                    continue
+                raise
             self._motion_variant = variant
             _LOGGER.debug("Variante de detección de movimiento: %s", variant)
             return variant
+
+        if privilege_error is not None:
+            raise privilege_error
         raise FoscamError(
             "La cámara no responde ni a getMotionDetectConfig ni a "
-            "getMotionDetectConfig1; revisa que el usuario tenga permisos de admin"
+            "getMotionDetectConfig1 con este firmware"
         )
 
     async def async_get_motion_config(self) -> dict[str, str]:

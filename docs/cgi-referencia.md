@@ -23,9 +23,22 @@ Dos rarezas del firmware que la integración tiene en cuenta:
 * El XML **no siempre es válido**. Un SSID con un `&` sin escapar rompe cualquier
   parser estricto, así que `api.py` cae a una extracción por expresión regular
   cuando el parseo falla, en vez de dejar la entidad indisponible.
-* Algunos firmwares **no descodifican el porcentaje** en `usr` y `pwd`. Si la
-  autenticación falla con las credenciales codificadas, el cliente reintenta una
-  vez enviándolas en crudo y recuerda cuál de los dos modos funciona.
+* Muchos firmwares **no descodifican el porcentaje** en `usr` y `pwd`. Una
+  contraseña como `Aq^Ub*Kx2Zt7` enviada de forma estándar viaja como
+  `Aq%5EUb*Kx2Zt7`, y la cámara la compara literalmente: es otra contraseña, así
+  que rechaza el acceso. La misma URL pegada en el navegador funciona, porque
+  ahí el `^` viaja tal cual.
+
+  Por eso el cliente escribe `usr` y `pwd` en **modo literal** por defecto,
+  igual que curl: escapa sólo lo que rompería la propia URL (`&`, `=`, `+`,
+  `#`, `%`, el espacio) y deja el resto intacto. Si aun así hay rechazo, prueba
+  una vez la codificación porcentual completa y recuerda cuál de los dos modos
+  entiende esa cámara, para no gastar intentos en los siguientes comandos.
+
+  Queda una limitación que no tiene arreglo: si la contraseña contiene `&`,
+  `=`, `+`, `#`, `%` o un espacio **y** el firmware no descodifica, no hay forma
+  de enviarla por la API CGI. En ese caso hay que cambiar la contraseña de la
+  cámara por una sin esos caracteres.
 
 ## Códigos de `result`
 

@@ -104,38 +104,89 @@ async def test_update_motion_preserves_other_fields(api):
         assert f"{field}=" in sent
 
 
-async def test_credentials_are_url_encoded(api):
-    """Una contraseña con caracteres especiales viaja codificada."""
+async def test_credentials_travel_literally_by_default(api):
+    """Por defecto la contraseña viaja como la escribe curl o el navegador.
+
+    Es la regresión que motivó este modo: una contraseña con `^` enviada como
+    `%5E` llega a muchos firmwares de Foscam como otra contraseña distinta,
+    porque no descodifican el porcentaje en usr ni en pwd.
+    """
     session = FakeSession()
     client = api.FoscamClient(
-        session, "192.0.2.10", 443, "user", "a b&c=d", ssl=True, verify_ssl=False
+        session, "192.0.2.10", 443, "camera_user", "Aq^Ub*Kx2Zt7", ssl=True, verify_ssl=False
+    )
+    await client.async_command("getDevState")
+    assert "pwd=Aq^Ub*Kx2Zt7" in session.requests[-1]
+    assert client._credential_mode == api.CREDENTIAL_MODE_LITERAL
+
+
+async def test_url_breaking_characters_are_still_escaped(api):
+    """Lo que rompería la URL se escapa incluso en modo literal."""
+    session = FakeSession()
+    client = api.FoscamClient(
+        session, "192.0.2.10", 443, "user", "a&b=c#d e", ssl=True, verify_ssl=False
     )
     await client.async_command("getDevState")
     url = session.requests[-1]
-    assert "pwd=a+b%26c%3Dd" in url or "pwd=a%20b%26c%3Dd" in url
+    pwd = url.split("pwd=", 1)[1]
+    assert pwd == "a%26b%3Dc%23d%20e"
+    # Y sigue habiendo exactamente un parámetro pwd, no tres.
+    assert url.count("&") == url.count("=") - 1
 
 
-async def test_raw_credentials_retry_on_auth_failure(api):
-    """Si el firmware no descodifica el %XX, reintentamos en crudo una vez."""
+async def test_falls_back_to_percent_encoding(api):
+    """Si el modo literal se rechaza, se prueba la codificación porcentual."""
 
-    class Flaky(FakeSession):
+    class OnlyEncoded(FakeSession):
         def get(self, url, **kwargs):
-            text = str(url)
-            self.requests.append(text)
-            if "%" in text.split("pwd=", 1)[-1]:
-                body = "<CGI_Result><result>-2</result></CGI_Result>"
-            else:
-                body = "<CGI_Result><result>0</result><mac>001122334455</mac></CGI_Result>"
             from .conftest import FakeResponse
 
+            text = str(url)
+            self.requests.append(text)
+            encoded = "%5E" in text.split("pwd=", 1)[-1]
+            body = (
+                "<CGI_Result><result>0</result><mac>001122334455</mac></CGI_Result>"
+                if encoded
+                else "<CGI_Result><result>-2</result></CGI_Result>"
+            )
             return FakeResponse(body.encode())
 
-    session = Flaky()
+    session = OnlyEncoded()
     client = api.FoscamClient(
-        session, "192.0.2.10", 443, "user", "p^ss*word", ssl=True, verify_ssl=False
+        session, "192.0.2.10", 443, "user", "p^ssword", ssl=True, verify_ssl=False
     )
     data = await client.async_get_dev_info()
     assert data["mac"] == "001122334455"
+    assert len(session.requests) == 2
+    assert client._credential_mode == api.CREDENTIAL_MODE_ENCODED
+
+
+async def test_working_mode_is_remembered(api):
+    """Descubierto el modo, no se malgastan intentos con el otro.
+
+    Importa porque estos firmwares bloquean la cuenta tras unos pocos
+    rechazos: sondear en cada petición acabaría por dejarnos fuera.
+    """
+
+    class OnlyEncoded(FakeSession):
+        def get(self, url, **kwargs):
+            from .conftest import FakeResponse
+
+            text = str(url)
+            self.requests.append(text)
+            ok = "%5E" in text.split("pwd=", 1)[-1]
+            return FakeResponse(
+                f"<CGI_Result><result>{0 if ok else -2}</result></CGI_Result>".encode()
+            )
+
+    session = OnlyEncoded()
+    client = api.FoscamClient(
+        session, "192.0.2.10", 443, "user", "p^ssword", ssl=True, verify_ssl=False
+    )
+    await client.async_get_dev_state()
+    session.requests.clear()
+    await client.async_get_dev_state()
+    await client.async_get_dev_state()
     assert len(session.requests) == 2
 
 
@@ -158,3 +209,70 @@ async def test_probe_reports_capabilities(api):
     client = _client(api, session)
     result = await client.async_probe({"infra_led": "getInfraLedConfig", "siren": "getSirenConfig"})
     assert result == {"infra_led": True, "siren": False}
+
+
+async def test_privilege_rejection_is_distinguished(api):
+    """Un -3 se marca como problema de privilegios, no de contraseña."""
+    session = FakeSession({"getDevState": "<CGI_Result><result>-3</result></CGI_Result>"})
+    client = _client(api, session)
+    with pytest.raises(api.FoscamAuthError) as excinfo:
+        await client.async_get_dev_state()
+    assert excinfo.value.is_privilege_error
+    assert excinfo.value.code == -3
+
+
+async def test_retry_also_fires_on_privilege_rejection(api):
+    """El cambio de modo también se dispara con el código -3.
+
+    Hay firmwares que ante unas credenciales que no reconocen contestan -3 en
+    lugar de -2; si sólo reintentáramos ante un -2 daríamos por «sin permisos»
+    una cuenta perfectamente válida.
+    """
+
+    class Flaky(FakeSession):
+        def get(self, url, **kwargs):
+            from .conftest import FakeResponse
+
+            text = str(url)
+            self.requests.append(text)
+            literal = "^" in text.split("pwd=", 1)[-1]
+            body = (
+                "<CGI_Result><result>-3</result></CGI_Result>"
+                if literal
+                else "<CGI_Result><result>0</result><isEnable>1</isEnable></CGI_Result>"
+            )
+            return FakeResponse(body.encode())
+
+    session = Flaky()
+    client = api.FoscamClient(
+        session, "192.0.2.10", 443, "user", "p^ssword", ssl=True, verify_ssl=False
+    )
+    data = await client.async_command("getMotionDetectConfig")
+    assert data["isEnable"] == "1"
+    assert len(session.requests) == 2
+
+
+async def test_motion_variant_reports_privilege_error(api):
+    """Si ninguna variante es accesible, el error habla de privilegios."""
+    session = FakeSession(
+        {
+            "getMotionDetectConfig1": "<CGI_Result><result>-3</result></CGI_Result>",
+            "getMotionDetectConfig": "<CGI_Result><result>-3</result></CGI_Result>",
+        }
+    )
+    client = _client(api, session)
+    with pytest.raises(api.FoscamAuthError) as excinfo:
+        await client.async_detect_motion_variant()
+    assert excinfo.value.is_privilege_error
+
+
+async def test_privilege_rejection_falls_back_to_legacy(api):
+    """Un -3 en la variante nueva no impide usar la clásica."""
+    session = FakeSession(
+        {
+            "getMotionDetectConfig1": "<CGI_Result><result>-3</result></CGI_Result>",
+            "getMotionDetectConfig": MOTION_XML,
+        }
+    )
+    client = _client(api, session)
+    assert await client.async_detect_motion_variant() == api.MOTION_VARIANT_LEGACY
