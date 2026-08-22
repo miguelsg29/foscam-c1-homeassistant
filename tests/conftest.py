@@ -85,3 +85,9 @@ class FakeSession:
 def api():
     """Módulo api ya cargado."""
     return load("api")
+
+
+@pytest.fixture
+def const():
+    """Módulo de constantes ya cargado."""
+    return load("const")

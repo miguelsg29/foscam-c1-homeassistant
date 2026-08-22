@@ -27,6 +27,12 @@ SELF_EXCLUDE = {
     ".github/workflows/secret-scan.yml",
 }
 
+#: Archivo local, ignorado por git, con un valor literal por línea que nunca
+#: debe aparecer en el repositorio: tu contraseña real, tu usuario de la cámara,
+#: tu SSID... Es la única defensa fiable contra un valor real citado en medio
+#: de una frase, donde ningún patrón genérico lo reconoce como secreto.
+DENYLIST_FILE = ROOT / ".secret-values"
+
 BINARY_SUFFIXES = {
     ".png",
     ".jpg",
@@ -80,10 +86,31 @@ def tracked_files() -> list[Path]:
     return [ROOT / line for line in output.splitlines() if line]
 
 
+def denylisted_values() -> list[str]:
+    """Leer los valores literales prohibidos del archivo local, si existe."""
+    if not DENYLIST_FILE.is_file():
+        return []
+    return [
+        line.strip()
+        for line in DENYLIST_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
 def main(argv: list[str]) -> int:
     """Ejecutar la comprobación y devolver el código de salida."""
     paths = [Path(a).resolve() for a in argv] if argv else tracked_files()
     findings: list[str] = []
+    denylist = denylisted_values()
+
+    if not denylist:
+        print(
+            "AVISO: no hay .secret-values. Los patrones de abajo cazan IPs, puertos y\n"
+            "       URLs con credenciales, pero NO un valor real citado en medio de una\n"
+            "       frase. Copia .secret-values.example a .secret-values y pon ahí tu\n"
+            "       contraseña, tu usuario y tu SSID reales para cerrar ese hueco.\n",
+            file=sys.stderr,
+        )
 
     for path in paths:
         if not path.is_file() or path.suffix.lower() in BINARY_SUFFIXES:
@@ -97,6 +124,12 @@ def main(argv: list[str]) -> int:
             continue
 
         for lineno, line in enumerate(text.splitlines(), start=1):
+            for value in denylist:
+                if value in line:
+                    findings.append(
+                        f"{rel}:{lineno}: [valor-prohibido] Un valor de "
+                        f".secret-values aparece en este archivo."
+                    )
             for name, pattern, hint in CHECKS:
                 match = pattern.search(line)
                 if not match:
@@ -115,7 +148,8 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    print(f"OK: {len(paths)} archivos revisados, ningún dato real detectado.")
+    extra = f", {len(denylist)} valores prohibidos" if denylist else ""
+    print(f"OK: {len(paths)} archivos revisados{extra}, ningún dato real detectado.")
     return 0
 
 

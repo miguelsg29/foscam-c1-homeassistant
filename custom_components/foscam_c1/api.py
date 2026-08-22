@@ -13,17 +13,15 @@ import aiohttp
 from yarl import URL
 
 from .const import (
+    ALARM_COMMANDS,
+    ALARM_MOTION,
     CMD_CLOSE_INFRA,
     CMD_GET_DEV_INFO,
     CMD_GET_DEV_STATE,
     CMD_GET_INFRA,
-    CMD_GET_MOTION,
-    CMD_GET_MOTION1,
     CMD_OPEN_INFRA,
     CMD_REBOOT,
     CMD_SET_INFRA,
-    CMD_SET_MOTION,
-    CMD_SET_MOTION1,
     CMD_SNAP,
     DEFAULT_TIMEOUT,
     MOTION_VARIANT_LEGACY,
@@ -185,7 +183,8 @@ class FoscamClient:
         #: «literal», que es el que usan curl y la barra del navegador y el
         #: único que funciona en muchos firmwares. Ver _CREDENTIAL_MODES.
         self._credential_mode: str | None = None
-        self._motion_variant: str | None = None
+        #: Variante de la API por alarma ("motion", "audio"), una vez detectada.
+        self._alarm_variants: dict[str, str] = {}
 
     # -- Propiedades ------------------------------------------------------------
 
@@ -198,7 +197,12 @@ class FoscamClient:
     @property
     def motion_variant(self) -> str | None:
         """Variante de la API de detección de movimiento ya detectada."""
-        return self._motion_variant
+        return self._alarm_variants.get(ALARM_MOTION)
+
+    @property
+    def alarm_variants(self) -> dict[str, str]:
+        """Variantes detectadas para cada alarma."""
+        return dict(self._alarm_variants)
 
     # -- Capa de transporte -----------------------------------------------------
 
@@ -347,18 +351,21 @@ class FoscamClient:
         """Reiniciar la cámara."""
         await self.async_command(CMD_REBOOT)
 
-    # -- Detección de movimiento ------------------------------------------------
+    # -- Alarmas de movimiento y de sonido --------------------------------------
+    #
+    # Las dos se configuran igual (isEnable, linkage, sensitivity,
+    # triggerInterval, scheduleN) y las dos tienen el mismo firmware partido en
+    # dos variantes, así que comparten implementación.
 
-    async def async_detect_motion_variant(self) -> str:
-        """Averiguar qué API de detección de movimiento soporta este firmware."""
-        if self._motion_variant is not None:
-            return self._motion_variant
+    async def async_detect_alarm_variant(self, alarm: str) -> str:
+        """Averiguar qué variante de la API soporta este firmware para `alarm`."""
+        if (cached := self._alarm_variants.get(alarm)) is not None:
+            return cached
 
+        get_v1, _, get_legacy, _ = ALARM_COMMANDS[alarm]
         privilege_error: FoscamAuthError | None = None
-        for cmd, variant in (
-            (CMD_GET_MOTION1, MOTION_VARIANT_V1),
-            (CMD_GET_MOTION, MOTION_VARIANT_LEGACY),
-        ):
+
+        for cmd, variant in ((get_v1, MOTION_VARIANT_V1), (get_legacy, MOTION_VARIANT_LEGACY)):
             try:
                 await self.async_command(cmd)
             except FoscamCommandError as err:
@@ -373,37 +380,50 @@ class FoscamClient:
                     privilege_error = err
                     continue
                 raise
-            self._motion_variant = variant
-            _LOGGER.debug("Variante de detección de movimiento: %s", variant)
+            self._alarm_variants[alarm] = variant
+            _LOGGER.debug("Variante de la alarma '%s': %s", alarm, variant)
             return variant
 
         if privilege_error is not None:
             raise privilege_error
         raise FoscamError(
-            "La cámara no responde ni a getMotionDetectConfig ni a "
-            "getMotionDetectConfig1 con este firmware"
+            f"La cámara no responde ni a {get_legacy} ni a {get_v1} con este firmware"
         )
+
+    async def async_get_alarm_config(self, alarm: str) -> dict[str, str]:
+        """Leer la configuración completa de una alarma."""
+        variant = await self.async_detect_alarm_variant(alarm)
+        get_v1, _, get_legacy, _ = ALARM_COMMANDS[alarm]
+        return await self.async_command(get_v1 if variant == MOTION_VARIANT_V1 else get_legacy)
+
+    async def async_update_alarm_config(self, alarm: str, **changes: Any) -> dict[str, str]:
+        """Modificar una alarma sin perder el resto de sus ajustes.
+
+        `setMotionDetectConfig` y `setAudioAlarmConfig` son *destructivos*: los
+        parámetros que no se envían vuelven a su valor por defecto. Por eso
+        leemos la configuración actual, aplicamos encima sólo los campos que
+        cambian y la reenviamos entera.
+        """
+        variant = await self.async_detect_alarm_variant(alarm)
+        payload: dict[str, Any] = dict(await self.async_get_alarm_config(alarm))
+        payload.update({k: v for k, v in changes.items() if v is not None})
+        _, set_v1, _, set_legacy = ALARM_COMMANDS[alarm]
+        await self.async_command(set_v1 if variant == MOTION_VARIANT_V1 else set_legacy, payload)
+        return payload
+
+    # Atajos para la alarma de movimiento, que es la que usa el config flow.
+
+    async def async_detect_motion_variant(self) -> str:
+        """Averiguar qué API de detección de movimiento soporta este firmware."""
+        return await self.async_detect_alarm_variant(ALARM_MOTION)
 
     async def async_get_motion_config(self) -> dict[str, str]:
         """Leer la configuración completa de detección de movimiento."""
-        variant = await self.async_detect_motion_variant()
-        cmd = CMD_GET_MOTION1 if variant == MOTION_VARIANT_V1 else CMD_GET_MOTION
-        return await self.async_command(cmd)
+        return await self.async_get_alarm_config(ALARM_MOTION)
 
     async def async_update_motion_config(self, **changes: Any) -> dict[str, str]:
-        """Modificar la detección de movimiento sin perder el resto de ajustes.
-
-        `setMotionDetectConfig` es *destructivo*: los parámetros que no se envían
-        vuelven a su valor por defecto. Por eso leemos la configuración actual,
-        aplicamos encima sólo los campos que cambian y la reenviamos entera.
-        """
-        variant = await self.async_detect_motion_variant()
-        current = await self.async_get_motion_config()
-        payload: dict[str, Any] = dict(current)
-        payload.update({k: v for k, v in changes.items() if v is not None})
-        cmd = CMD_SET_MOTION1 if variant == MOTION_VARIANT_V1 else CMD_SET_MOTION
-        await self.async_command(cmd, payload)
-        return payload
+        """Modificar la detección de movimiento conservando el resto."""
+        return await self.async_update_alarm_config(ALARM_MOTION, **changes)
 
     # -- Descubrimiento de capacidades ------------------------------------------
 

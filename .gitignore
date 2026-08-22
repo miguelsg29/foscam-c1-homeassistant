@@ -11,6 +11,8 @@ secrets.yml
 *.crt
 *.p12
 credentials*
+# Lista local de valores literales que nunca deben aparecer en el repo
+.secret-values
 *_secret*
 *.secret
 # ...pero el propio detector sí se versiona

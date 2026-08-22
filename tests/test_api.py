@@ -67,7 +67,7 @@ async def test_unsupported_command_is_flagged(api):
     assert excinfo.value.unsupported
 
 
-async def test_motion_variant_falls_back_to_legacy(api):
+async def test_motion_variant_falls_back_to_legacy(api, const):
     """Si getMotionDetectConfig1 no existe, usamos el comando clásico."""
     session = FakeSession(
         {
@@ -76,7 +76,7 @@ async def test_motion_variant_falls_back_to_legacy(api):
         }
     )
     client = _client(api, session)
-    assert await client.async_detect_motion_variant() == api.MOTION_VARIANT_LEGACY
+    assert await client.async_detect_motion_variant() == const.MOTION_VARIANT_LEGACY
 
 
 async def test_update_motion_preserves_other_fields(api):
@@ -266,7 +266,7 @@ async def test_motion_variant_reports_privilege_error(api):
     assert excinfo.value.is_privilege_error
 
 
-async def test_privilege_rejection_falls_back_to_legacy(api):
+async def test_privilege_rejection_falls_back_to_legacy(api, const):
     """Un -3 en la variante nueva no impide usar la clásica."""
     session = FakeSession(
         {
@@ -275,4 +275,51 @@ async def test_privilege_rejection_falls_back_to_legacy(api):
         }
     )
     client = _client(api, session)
-    assert await client.async_detect_motion_variant() == api.MOTION_VARIANT_LEGACY
+    assert await client.async_detect_motion_variant() == const.MOTION_VARIANT_LEGACY
+
+
+AUDIO_XML = """<CGI_Result>
+<result>0</result>
+<isEnable>0</isEnable>
+<linkage>4</linkage>
+<sensitivity>1</sensitivity>
+<triggerInterval>10</triggerInterval>
+<schedule0>281474976710655</schedule0>
+</CGI_Result>"""
+
+
+async def test_audio_alarm_uses_its_own_commands(api, const):
+    """La alarma de sonido habla con setAudioAlarmConfig, no con la de movimiento."""
+    session = FakeSession(
+        {
+            "getAudioAlarmConfig1": "<CGI_Result><result>-1</result></CGI_Result>",
+            "getAudioAlarmConfig": AUDIO_XML,
+        }
+    )
+    client = _client(api, session)
+    payload = await client.async_update_alarm_config(const.ALARM_AUDIO, isEnable=1)
+
+    assert payload["isEnable"] == 1
+    assert payload["sensitivity"] == "1"
+    sent = [url for url in session.requests if "cmd=setAudioAlarmConfig" in url][-1]
+    assert "triggerInterval=" in sent and "schedule0=" in sent
+    assert not any("MotionDetect" in url for url in session.requests)
+
+
+async def test_alarm_variants_are_detected_independently(api, const):
+    """Cada alarma recuerda su propia variante de firmware.
+
+    Un firmware puede exponer la versión moderna de una y la antigua de la otra,
+    así que compartir la detección daría comandos incorrectos.
+    """
+    session = FakeSession(
+        {
+            "getMotionDetectConfig1": MOTION_XML,
+            "getAudioAlarmConfig1": "<CGI_Result><result>-1</result></CGI_Result>",
+            "getAudioAlarmConfig": AUDIO_XML,
+        }
+    )
+    client = _client(api, session)
+    assert await client.async_detect_alarm_variant(const.ALARM_MOTION) == const.MOTION_VARIANT_V1
+    assert await client.async_detect_alarm_variant(const.ALARM_AUDIO) == const.MOTION_VARIANT_LEGACY
+    assert client.motion_variant == const.MOTION_VARIANT_V1

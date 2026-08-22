@@ -33,12 +33,15 @@ que esta integración resuelve:
 | Plataforma | Entidad | Notas |
 | --- | --- | --- |
 | `switch` | Detección de movimiento | Lee el estado en vivo de `getDevState`, así que responde en segundos |
+| `switch` | Detección de sonido | Igual que la de movimiento, en los modelos que la soportan |
 | `switch` | LED infrarrojo | Sólo si el modelo responde a `getInfraLedConfig` |
 | `switch` | Sirena | Sólo en modelos con sirena (la C1 no la tiene) |
 | `switch` | Al detectar: zumbador / email / foto / grabar | Los cuatro bits del campo `linkage` |
+| `switch` | Al oír: zumbador / email / foto / grabar | Lo mismo para la alarma de sonido |
 | `binary_sensor` | Movimiento, Sonido, Grabando, Wifi, Entrada de alarma, Problema con la SD | |
 | `sensor` | Estado de la detección, Tarjeta SD, Espacio libre/total/ocupado, Red conectada, Modo del infrarrojo, Firmware, NTP, DDNS, UPnP | |
 | `number` | Sensibilidad, Intervalo de disparo, Intervalo entre fotos | La escala de sensibilidad se ajusta sola al firmware (0-4 ó 0-100) |
+| `number` | Sensibilidad de sonido, Intervalo de disparo del sonido | Sólo si la cámara responde a `getAudioAlarmConfig` |
 | `button` | Reiniciar cámara, Detectar todo el día en toda la imagen | |
 
 Las entidades de diagnóstico y las más ruidosas vienen **desactivadas por
@@ -137,21 +140,36 @@ Este repositorio es público y describe una cámara que está dentro de una casa
 Lo que **nunca** debe llegar a un commit: la IP de la cámara, el puerto abierto
 en el router, el usuario y la contraseña.
 
-Tres capas lo impiden:
+Cuatro capas lo impiden:
 
 1. **`.gitignore`** — ignora `secrets.yaml`, `.env`, salidas de la sonda
    (`probe-*.json`) y la carpeta `manual/`.
-2. **`tools/check_no_secrets.py`** — falla si encuentra una IP privada, un
+2. **`.secret-values`** — un archivo **local, ignorado por git**, con tus valores
+   reales, uno por línea. `check_no_secrets.py` falla si alguno aparece en un
+   archivo versionado. Es la única capa que caza un valor real citado en medio
+   de una frase, donde ningún patrón genérico lo reconoce como secreto. Empieza
+   copiando `.secret-values.example`:
+
+   ```bash
+   cp .secret-values.example .secret-values
+   # edítalo y pon tu IP, tu puerto, tu usuario, tu contraseña y tu SSID
+   ```
+
+3. **`tools/check_no_secrets.py`** — falla si encuentra una IP privada, un
    `usr=`/`pwd=` con valor real o un puerto no estándar en una URL.
-3. **gitleaks** — con reglas propias en `.gitleaks.toml`, tanto en `pre-commit`
+4. **gitleaks** — con reglas propias en `.gitleaks.toml`, tanto en `pre-commit`
    como en CI.
 
-Actívalas en local con:
+Activa los ganchos en local con:
 
 ```bash
 pip install pre-commit
 pre-commit install
 ```
+
+Las capas 3 y 4 son patrones: cazan lo que *parece* un secreto por su forma. La
+capa 2 es una lista de valores concretos, y es la que de verdad te protege el
+día que escribas tu contraseña en una explicación del README.
 
 En la documentación se usan siempre marcadores: `192.0.2.10` (rango reservado
 por la RFC 5737 para ejemplos), el puerto `443` y `!secret foscam_password`.

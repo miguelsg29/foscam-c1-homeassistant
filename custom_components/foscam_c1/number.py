@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import FoscamError
-from .const import MOTION_VARIANT_LEGACY, SENSITIVITY_MAX
+from .const import ALARM_AUDIO, ALARM_MOTION, MOTION_VARIANT_LEGACY, SENSITIVITY_MAX
 from .coordinator import FoscamConfigEntry, FoscamCoordinator, FoscamData
 from .entity import FoscamEntity
 
@@ -32,23 +32,27 @@ class FoscamNumberDescription(NumberEntityDescription):
     value_fn: Callable[[FoscamData], float | None]
     set_fn: Callable[[FoscamCoordinator, float], Coroutine[Any, Any, None]]
     dynamic_max: bool = False
+    capability: str | None = None
+    alarm: str = ALARM_MOTION
 
 
-def _motion_field(field: str) -> Callable[[FoscamData], float | None]:
-    """Leer un campo numérico de la configuración de movimiento."""
+def _alarm_field(field: str, alarm: str = ALARM_MOTION) -> Callable[[FoscamData], float | None]:
+    """Leer un campo numérico de la configuración de una alarma."""
 
     def _reader(data: FoscamData) -> float | None:
-        value = data.motion_int(field)
+        value = data.alarm_int(alarm, field)
         return None if value < 0 else float(value)
 
     return _reader
 
 
-def _motion_setter(field: str) -> Callable[[FoscamCoordinator, float], Coroutine[Any, Any, None]]:
+def _alarm_setter(
+    field: str, alarm: str = ALARM_MOTION
+) -> Callable[[FoscamCoordinator, float], Coroutine[Any, Any, None]]:
     """Escribir un campo numérico conservando el resto de la configuración."""
 
     async def _setter(coordinator: FoscamCoordinator, value: float) -> None:
-        await coordinator.async_update_motion(**{field: int(value)})
+        await coordinator.async_update_alarm(alarm, **{field: int(value)})
 
     return _setter
 
@@ -65,8 +69,8 @@ NUMBERS: tuple[FoscamNumberDescription, ...] = (
         native_max_value=4,
         native_step=1,
         dynamic_max=True,
-        value_fn=_motion_field("sensitivity"),
-        set_fn=_motion_setter("sensitivity"),
+        value_fn=_alarm_field("sensitivity"),
+        set_fn=_alarm_setter("sensitivity"),
     ),
     FoscamNumberDescription(
         key="trigger_interval",
@@ -79,8 +83,8 @@ NUMBERS: tuple[FoscamNumberDescription, ...] = (
         native_max_value=15,
         native_step=1,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        value_fn=_motion_field("triggerInterval"),
-        set_fn=_motion_setter("triggerInterval"),
+        value_fn=_alarm_field("triggerInterval"),
+        set_fn=_alarm_setter("triggerInterval"),
     ),
     FoscamNumberDescription(
         key="snap_interval",
@@ -93,8 +97,40 @@ NUMBERS: tuple[FoscamNumberDescription, ...] = (
         native_max_value=10,
         native_step=1,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        value_fn=_motion_field("snapInterval"),
-        set_fn=_motion_setter("snapInterval"),
+        value_fn=_alarm_field("snapInterval"),
+        set_fn=_alarm_setter("snapInterval"),
+    ),
+    FoscamNumberDescription(
+        key="sound_sensitivity",
+        translation_key="sound_sensitivity",
+        field="sensitivity",
+        alarm=ALARM_AUDIO,
+        capability="audio_alarm",
+        icon="mdi:volume-high",
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.SLIDER,
+        native_min_value=0,
+        native_max_value=4,
+        native_step=1,
+        dynamic_max=True,
+        value_fn=_alarm_field("sensitivity", ALARM_AUDIO),
+        set_fn=_alarm_setter("sensitivity", ALARM_AUDIO),
+    ),
+    FoscamNumberDescription(
+        key="sound_trigger_interval",
+        translation_key="sound_trigger_interval",
+        field="triggerInterval",
+        alarm=ALARM_AUDIO,
+        capability="audio_alarm",
+        icon="mdi:timer-outline",
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+        native_min_value=5,
+        native_max_value=15,
+        native_step=1,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        value_fn=_alarm_field("triggerInterval", ALARM_AUDIO),
+        set_fn=_alarm_setter("triggerInterval", ALARM_AUDIO),
     ),
 )
 
@@ -106,7 +142,12 @@ async def async_setup_entry(
 ) -> None:
     """Dar de alta los controles numéricos."""
     coordinator = entry.runtime_data
-    async_add_entities(FoscamNumber(coordinator, description) for description in NUMBERS)
+    capabilities = coordinator.data.capabilities if coordinator.data else {}
+    async_add_entities(
+        FoscamNumber(coordinator, description)
+        for description in NUMBERS
+        if description.capability is None or capabilities.get(description.capability)
+    )
 
 
 class FoscamNumber(FoscamEntity, NumberEntity):
@@ -133,7 +174,8 @@ class FoscamNumber(FoscamEntity, NumberEntity):
         base = float(self.entity_description.native_max_value or 0)
         if not self.entity_description.dynamic_max:
             return base
-        variant = self.coordinator.client.motion_variant or MOTION_VARIANT_LEGACY
+        variants = self.coordinator.client.alarm_variants
+        variant = variants.get(self.entity_description.alarm) or MOTION_VARIANT_LEGACY
         base = float(SENSITIVITY_MAX.get(variant, base))
         current = self.native_value or 0
         return max(base, float(current))

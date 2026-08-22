@@ -15,7 +15,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import FoscamError
 from .const import (
+    ALARM_AUDIO,
     ALARM_DISABLED,
+    ALARM_MOTION,
     LINKAGE_MAIL,
     LINKAGE_RECORD,
     LINKAGE_RING,
@@ -38,11 +40,11 @@ class FoscamSwitchDescription(SwitchEntityDescription):
     capability: str | None = None
 
 
-def _linkage_is_on(bit: int) -> Callable[[FoscamData], bool | None]:
+def _linkage_is_on(bit: int, alarm: str = ALARM_MOTION) -> Callable[[FoscamData], bool | None]:
     """Devolver un lector del bit indicado del campo `linkage`."""
 
     def _reader(data: FoscamData) -> bool | None:
-        linkage = data.motion_int("linkage")
+        linkage = data.alarm_int(alarm, "linkage")
         if linkage < 0:
             return None
         return bool(linkage & bit)
@@ -50,14 +52,15 @@ def _linkage_is_on(bit: int) -> Callable[[FoscamData], bool | None]:
     return _reader
 
 
-def _linkage_setter(bit: int) -> Callable[[FoscamCoordinator, bool], Coroutine[Any, Any, None]]:
+def _linkage_setter(
+    bit: int, alarm: str = ALARM_MOTION
+) -> Callable[[FoscamCoordinator, bool], Coroutine[Any, Any, None]]:
     """Devolver un escritor que activa o desactiva el bit indicado."""
 
     async def _setter(coordinator: FoscamCoordinator, value: bool) -> None:
-        current = coordinator.data.motion_int("linkage", 0)
-        current = max(current, 0)
+        current = max(coordinator.data.alarm_int(alarm, "linkage", 0), 0)
         new = current | bit if value else current & ~bit
-        await coordinator.async_update_motion(linkage=new)
+        await coordinator.async_update_alarm(alarm, linkage=new)
 
     return _setter
 
@@ -77,7 +80,26 @@ def _motion_is_on(data: FoscamData) -> bool | None:
 
 async def _motion_setter(coordinator: FoscamCoordinator, value: bool) -> None:
     """Activar o desactivar la detección de movimiento."""
-    await coordinator.async_update_motion(isEnable=1 if value else 0)
+    await coordinator.async_update_alarm(ALARM_MOTION, isEnable=1 if value else 0)
+
+
+def _sound_is_on(data: FoscamData) -> bool | None:
+    """Estado de la detección de sonido.
+
+    Igual que con el movimiento, `soundAlarm` de getDevState vale 0 cuando la
+    detección está apagada y se sondea cada pocos segundos, así que responde
+    mucho antes que releer la configuración completa.
+    """
+    alarm = data.state_int("soundAlarm")
+    if alarm >= 0:
+        return alarm != ALARM_DISABLED
+    enabled = data.audio_int("isEnable")
+    return None if enabled < 0 else bool(enabled)
+
+
+async def _sound_setter(coordinator: FoscamCoordinator, value: bool) -> None:
+    """Activar o desactivar la detección de sonido."""
+    await coordinator.async_update_alarm(ALARM_AUDIO, isEnable=1 if value else 0)
 
 
 async def _siren_setter(coordinator: FoscamCoordinator, value: bool) -> None:
@@ -116,6 +138,14 @@ SWITCHES: tuple[FoscamSwitchDescription, ...] = (
             None if data.state_int("infraLedState") < 0 else bool(data.state_int("infraLedState"))
         ),
         set_fn=_infra_setter,
+    ),
+    FoscamSwitchDescription(
+        key="sound_detection",
+        translation_key="sound_detection",
+        icon="mdi:account-voice",
+        capability="audio_alarm",
+        is_on_fn=_sound_is_on,
+        set_fn=_sound_setter,
     ),
     # Best-effort: la C1 no lleva sirena, así que esta entidad sólo aparece en
     # los modelos cuyo firmware responde a getSirenConfig.
@@ -160,6 +190,44 @@ SWITCHES: tuple[FoscamSwitchDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         is_on_fn=_linkage_is_on(LINKAGE_RECORD),
         set_fn=_linkage_setter(LINKAGE_RECORD),
+    ),
+    FoscamSwitchDescription(
+        key="audio_linkage_snap",
+        translation_key="audio_linkage_snap",
+        icon="mdi:camera-plus",
+        entity_category=EntityCategory.CONFIG,
+        capability="audio_alarm",
+        is_on_fn=_linkage_is_on(LINKAGE_SNAP, ALARM_AUDIO),
+        set_fn=_linkage_setter(LINKAGE_SNAP, ALARM_AUDIO),
+    ),
+    FoscamSwitchDescription(
+        key="audio_linkage_record",
+        translation_key="audio_linkage_record",
+        icon="mdi:record-rec",
+        entity_category=EntityCategory.CONFIG,
+        capability="audio_alarm",
+        is_on_fn=_linkage_is_on(LINKAGE_RECORD, ALARM_AUDIO),
+        set_fn=_linkage_setter(LINKAGE_RECORD, ALARM_AUDIO),
+    ),
+    FoscamSwitchDescription(
+        key="audio_linkage_mail",
+        translation_key="audio_linkage_mail",
+        icon="mdi:email-alert",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        capability="audio_alarm",
+        is_on_fn=_linkage_is_on(LINKAGE_MAIL, ALARM_AUDIO),
+        set_fn=_linkage_setter(LINKAGE_MAIL, ALARM_AUDIO),
+    ),
+    FoscamSwitchDescription(
+        key="audio_linkage_ring",
+        translation_key="audio_linkage_ring",
+        icon="mdi:bell-ring",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        capability="audio_alarm",
+        is_on_fn=_linkage_is_on(LINKAGE_RING, ALARM_AUDIO),
+        set_fn=_linkage_setter(LINKAGE_RING, ALARM_AUDIO),
     ),
 )
 

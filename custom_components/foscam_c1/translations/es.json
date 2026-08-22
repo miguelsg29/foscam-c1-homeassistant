@@ -75,6 +75,21 @@
       },
       "linkage_record": {
         "name": "Al detectar: grabar"
+      },
+      "sound_detection": {
+        "name": "Detección de sonido"
+      },
+      "audio_linkage_snap": {
+        "name": "Al oír: foto"
+      },
+      "audio_linkage_record": {
+        "name": "Al oír: grabar"
+      },
+      "audio_linkage_mail": {
+        "name": "Al oír: email"
+      },
+      "audio_linkage_ring": {
+        "name": "Al oír: zumbador"
       }
     },
     "binary_sensor": {
@@ -178,6 +193,12 @@
       },
       "snap_interval": {
         "name": "Intervalo entre fotos"
+      },
+      "sound_sensitivity": {
+        "name": "Sensibilidad de sonido"
+      },
+      "sound_trigger_interval": {
+        "name": "Intervalo de disparo del sonido"
       }
     },
     "button": {

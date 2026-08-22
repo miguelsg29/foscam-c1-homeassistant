@@ -24,10 +24,9 @@ Dos rarezas del firmware que la integración tiene en cuenta:
   parser estricto, así que `api.py` cae a una extracción por expresión regular
   cuando el parseo falla, en vez de dejar la entidad indisponible.
 * Muchos firmwares **no descodifican el porcentaje** en `usr` y `pwd`. Una
-  contraseña como `Aq^Ub*Kx2Zt7` enviada de forma estándar viaja como
-  `Aq%5EUb*Kx2Zt7`, y la cámara la compara literalmente: es otra contraseña, así
-  que rechaza el acceso. La misma URL pegada en el navegador funciona, porque
-  ahí el `^` viaja tal cual.
+  contraseña que contenga `^` viaja de forma estándar como `%5E`, y la cámara
+  la compara literalmente: es otra contraseña, así que rechaza el acceso. La
+  misma URL pegada en el navegador funciona, porque ahí el `^` viaja tal cual.
 
   Por eso el cliente escribe `usr` y `pwd` en **modo literal** por defecto,
   igual que curl: escapa sólo lo que rompería la propia URL (`&`, `=`, `+`,
@@ -62,8 +61,10 @@ descubrir qué soporta cada modelo (`api.async_probe`).
 | --- | --- | --- |
 | `getDevState` | Alarmas en vivo, tarjeta SD, wifi, LED IR | admin |
 | `getDevInfo` | Modelo, firmware, MAC, número de serie | admin |
-| `getMotionDetectConfig` / `getMotionDetectConfig1` | Configuración de detección | admin |
+| `getMotionDetectConfig` / `getMotionDetectConfig1` | Configuración de detección de movimiento | admin |
 | `setMotionDetectConfig` / `setMotionDetectConfig1` | Escribir esa configuración | admin |
+| `getAudioAlarmConfig` / `getAudioAlarmConfig1` | Configuración de detección de sonido | admin |
+| `setAudioAlarmConfig` / `setAudioAlarmConfig1` | Escribir esa configuración | admin |
 | `getInfraLedConfig`, `setInfraLedConfig`, `openInfraLed`, `closeInfraLed` | LED infrarrojo | admin |
 | `getSirenConfig`, `setSirenConfig` | Sirena, en los modelos que la llevan | admin |
 | `snapPicture2` | Foto fija (devuelve el JPEG directamente) | visitor |
@@ -113,6 +114,17 @@ bit es media hora. `281474976710655` es `2^48 - 1`: las 24 horas activas.
 
 Una fila cada uno de la rejilla de detección, 10 bits por fila. `1023` es
 `2^10 - 1`: la fila entera activa.
+
+## Las dos alarmas se configuran igual
+
+Movimiento y sonido comparten la forma de los parámetros (`isEnable`, `linkage`,
+`sensitivity`, `triggerInterval`, `scheduleN`) y el mismo reparto en dos
+variantes de firmware, así que en `api.py` comparten implementación
+(`async_update_alarm_config`). La variante se detecta **por separado** para cada
+una: hay firmwares que exponen la versión moderna de una y la antigua de la otra.
+
+La de sonido no lleva `areaN` —no hay rejilla que recortar— y su `sensitivity`
+es un umbral de volumen, no de cambio de píxeles.
 
 ## El detalle que importa
 

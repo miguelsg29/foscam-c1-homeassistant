@@ -75,6 +75,21 @@
       },
       "linkage_record": {
         "name": "Alarm on motion: recording"
+      },
+      "sound_detection": {
+        "name": "Sound detection"
+      },
+      "audio_linkage_snap": {
+        "name": "On sound: snapshot"
+      },
+      "audio_linkage_record": {
+        "name": "On sound: recording"
+      },
+      "audio_linkage_mail": {
+        "name": "On sound: email"
+      },
+      "audio_linkage_ring": {
+        "name": "On sound: buzzer"
       }
     },
     "binary_sensor": {
@@ -111,7 +126,7 @@
         "state": {
           "disabled": "Disabled",
           "idle": "No alarm",
-          "detected": "Motion detected"
+          "detected": "Sound detected"
         }
       },
       "sd_status": {
@@ -178,6 +193,12 @@
       },
       "snap_interval": {
         "name": "Snapshot interval"
+      },
+      "sound_sensitivity": {
+        "name": "Sound sensitivity"
+      },
+      "sound_trigger_interval": {
+        "name": "Sound trigger interval"
       }
     },
     "button": {

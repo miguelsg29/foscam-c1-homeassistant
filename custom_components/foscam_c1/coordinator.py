@@ -14,6 +14,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import FoscamAuthError, FoscamClient, FoscamError
 from .const import (
+    ALARM_AUDIO,
+    ALARM_MOTION,
     CMD_GET_INFRA,
     DEFAULT_INFO_INTERVAL,
     DEFAULT_SCAN_INTERVAL_CONFIG,
@@ -40,6 +42,7 @@ class FoscamData:
 
     state: dict[str, str] = field(default_factory=dict)
     motion: dict[str, str] = field(default_factory=dict)
+    audio: dict[str, str] = field(default_factory=dict)
     info: dict[str, str] = field(default_factory=dict)
     infra: dict[str, str] = field(default_factory=dict)
     siren: dict[str, str] = field(default_factory=dict)
@@ -52,6 +55,15 @@ class FoscamData:
     def motion_int(self, key: str, default: int = -1) -> int:
         """Leer un campo numérico de la configuración de movimiento."""
         return _as_int(self.motion.get(key), default)
+
+    def audio_int(self, key: str, default: int = -1) -> int:
+        """Leer un campo numérico de la configuración de sonido."""
+        return _as_int(self.audio.get(key), default)
+
+    def alarm_int(self, alarm: str, key: str, default: int = -1) -> int:
+        """Leer un campo numérico de la alarma indicada."""
+        source = self.audio if alarm == ALARM_AUDIO else self.motion
+        return _as_int(source.get(key), default)
 
 
 def _as_int(value: Any, default: int = -1) -> int:
@@ -112,7 +124,9 @@ class FoscamCoordinator(DataUpdateCoordinator[FoscamData]):
                 self._probed = True
 
             if now - self._last_config >= self._config_interval:
-                data.motion = await self.client.async_get_motion_config()
+                data.motion = await self.client.async_get_alarm_config(ALARM_MOTION)
+                if data.capabilities.get("audio_alarm"):
+                    data.audio = await self.client.async_get_alarm_config(ALARM_AUDIO)
                 if data.capabilities.get("infra_led"):
                     data.infra = await self.client.async_get_infra_config()
                 if data.capabilities.get("siren"):
@@ -137,14 +151,22 @@ class FoscamCoordinator(DataUpdateCoordinator[FoscamData]):
         """Forzar que la próxima lectura recargue la configuración."""
         self._last_config = 0.0
 
-    async def async_update_motion(self, **changes: Any) -> None:
-        """Cambiar la configuración de movimiento y refrescar el estado."""
-        payload = await self.client.async_update_motion_config(**changes)
+    async def async_update_alarm(self, alarm: str, **changes: Any) -> None:
+        """Cambiar la configuración de una alarma y refrescar el estado."""
+        payload = await self.client.async_update_alarm_config(alarm, **changes)
         # Reflejamos el cambio de inmediato para que la UI no «rebote».
         if self.data is not None:
-            self.data.motion = {k: str(v) for k, v in payload.items()}
+            reflected = {k: str(v) for k, v in payload.items()}
+            if alarm == ALARM_AUDIO:
+                self.data.audio = reflected
+            else:
+                self.data.motion = reflected
         self.invalidate_config()
         await self.async_request_refresh()
+
+    async def async_update_motion(self, **changes: Any) -> None:
+        """Cambiar la configuración de movimiento y refrescar el estado."""
+        await self.async_update_alarm(ALARM_MOTION, **changes)
 
     async def async_set_siren(self, on: bool) -> None:
         """Activar o desactivar la sirena (sólo en modelos que la llevan).

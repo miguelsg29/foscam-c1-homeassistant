@@ -40,6 +40,10 @@ CMD_GET_MOTION: Final = "getMotionDetectConfig"
 CMD_SET_MOTION: Final = "setMotionDetectConfig"
 CMD_GET_MOTION1: Final = "getMotionDetectConfig1"
 CMD_SET_MOTION1: Final = "setMotionDetectConfig1"
+CMD_GET_AUDIO: Final = "getAudioAlarmConfig"
+CMD_SET_AUDIO: Final = "setAudioAlarmConfig"
+CMD_GET_AUDIO1: Final = "getAudioAlarmConfig1"
+CMD_SET_AUDIO1: Final = "setAudioAlarmConfig1"
 CMD_GET_INFRA: Final = "getInfraLedConfig"
 CMD_SET_INFRA: Final = "setInfraLedConfig"
 CMD_OPEN_INFRA: Final = "openInfraLed"
@@ -47,10 +51,21 @@ CMD_CLOSE_INFRA: Final = "closeInfraLed"
 CMD_SNAP: Final = "snapPicture2"
 CMD_REBOOT: Final = "rebootSystem"
 
-# Variantes de firmware para la configuración de detección de movimiento.
-# Las Foscam antiguas (H.264 "1080p/720p" tipo C1) exponen setMotionDetectConfig
-# con sensibilidad 0-4; los firmwares más nuevos exponen setMotionDetectConfig1
-# con sensibilidad 0-100 y un campo extra `x` / `y` de áreas.
+# Las dos alarmas que se configuran igual: movimiento y sonido. Comparten la
+# forma de los parámetros (isEnable, linkage, sensitivity, triggerInterval,
+# scheduleN) y el mismo problema: escribir es destructivo.
+ALARM_MOTION: Final = "motion"
+ALARM_AUDIO: Final = "audio"
+
+#: {alarma: (leer_v1, escribir_v1, leer_legacy, escribir_legacy)}
+ALARM_COMMANDS: Final = {
+    ALARM_MOTION: (CMD_GET_MOTION1, CMD_SET_MOTION1, CMD_GET_MOTION, CMD_SET_MOTION),
+    ALARM_AUDIO: (CMD_GET_AUDIO1, CMD_SET_AUDIO1, CMD_GET_AUDIO, CMD_SET_AUDIO),
+}
+
+# Variantes de firmware. Las Foscam antiguas (H.264 "1080p/720p" tipo C1)
+# exponen setMotionDetectConfig con sensibilidad 0-4; los firmwares más nuevos
+# exponen setMotionDetectConfig1 con sensibilidad 0-100 y campos extra de área.
 MOTION_VARIANT_LEGACY: Final = "legacy"
 MOTION_VARIANT_V1: Final = "v1"
 
