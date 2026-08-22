@@ -25,11 +25,22 @@ porque ambas buscan **patrones** (`usr=`, `pwd=`, IPs) y allí el valor estaba
 suelto en prosa. Por eso existe `.secret-values`: la tercera capa, que compara
 literalmente y es la única que cubre ese caso.
 
-`.secret-values` es local y está en `.gitignore`, así que hay que crearlo a
-mano (`cp .secret-values.example .secret-values`, un valor por línea) y
-**volver a rellenarlo cada vez que se roten las credenciales**. Si falta o está
-vacío, `check_no_secrets.py` sigue saliendo con 0 y sólo avisa por stderr: el
-hueco queda abierto sin que nada falle.
+Los valores con los que compara salen de **`.env`** (local, ignorado por git),
+que es donde ya están las credenciales para `probe_camera.py`. Se rota ahí y el
+detector se entera solo: mantener una lista aparte a mano fue lo que falló —el
+archivo quedó vacío mientras la fuga llevaba dos commits publicada—. Si `.env`
+falta o sigue igual que `.env.example`, `check_no_secrets.py` sale con 0 y sólo
+avisa por stderr: el hueco queda abierto sin que nada falle.
+
+De `.env` **no** entran la IP ni el puerto (ya los cazan los patrones, y un
+`443` comparado literalmente marcaría media documentación), ni los valores de
+menos de 6 caracteres, que darían falsos positivos por todas partes — de estos
+sí avisa, para no dejar un hueco callado. El descarte de marcadores compara de
+forma **exacta** contra `.env.example`: la regex `PLACEHOLDERS` lleva palabras
+genéricas como `usuario` y descartaría un usuario real que la contenga.
+
+`.secret-values` sigue existiendo y se une a `.env` sin repetir, para lo que no
+cabe allí: la contraseña anterior tras rotar, otra cámara, el router.
 
 Nada de esto corre solo. Hay que instalar los hooks una vez por clon:
 
@@ -62,7 +73,7 @@ Nunca escribas un valor real "solo como ejemplo ilustrativo". Nunca.
 
 ```bash
 ruff check . && ruff format --check .
-pytest -q                      # 30 pruebas, no necesitan Home Assistant
+pytest -q                      # 40 pruebas, no necesitan Home Assistant
 python tools/check_no_secrets.py
 gitleaks detect --config .gitleaks.toml --redact    # si lo tienes instalado
 ```

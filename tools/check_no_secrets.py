@@ -63,6 +63,22 @@ def _views(line: str) -> dict[str, str]:
     return vistas
 
 
+#: `.env` ya tiene las credenciales reales para `probe_camera.py`. Leerlas de
+#: ahí evita mantener dos archivos en paralelo, que es como se llegó a tener un
+#: `.secret-values` vacío mientras la fuga llevaba dos commits publicada.
+ENV_FILE = ROOT / ".env"
+ENV_EXAMPLE_FILE = ROOT / ".env.example"
+
+#: Claves de `.env` que NO entran en el denylist: la IP y el puerto ya los cazan
+#: los patrones de arriba, y además son cortos y numéricos. Un `443` comparado
+#: literalmente marcaría media documentación como fuga.
+_ENV_YA_CUBIERTAS = re.compile(r"(?i)_(HOST|PORT|IP|ADDRESS)$")
+
+#: Por debajo de esto un valor literal da más ruido que señal: `admin` aparece
+#: como palabra normal en la tabla de privilegios de docs/cgi-referencia.md.
+_LARGO_MINIMO = 6
+
+
 BINARY_SUFFIXES = {
     ".png",
     ".jpg",
@@ -116,6 +132,82 @@ def tracked_files() -> list[Path]:
     return [ROOT / line for line in output.splitlines() if line]
 
 
+def _pares_env(texto: str):
+    """Recorrer un archivo tipo `.env` devolviendo pares (clave, valor)."""
+    for line in texto.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        clave, _, valor = line.partition("=")
+        yield clave.strip(), valor.strip().strip("\"'")
+
+
+def _valores_de_ejemplo() -> set[str]:
+    """Leer los marcadores de `.env.example`.
+
+    Se comparan de forma exacta, no con la regex de marcadores genéricos: esa
+    lleva palabras como `usuario` y descartaría un usuario real que la contenga
+    —plausible en español— dejando un hueco sin avisar de nada.
+    """
+    if not ENV_EXAMPLE_FILE.is_file():
+        return set()
+    try:
+        texto = ENV_EXAMPLE_FILE.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return set()
+    return {valor for _, valor in _pares_env(texto) if valor}
+
+
+def env_values() -> list[str]:
+    """Leer del `.env` local los valores que merece la pena comparar literalmente.
+
+    Descarta los que ya cubren los patrones (IP, puerto), los que siguen siendo
+    idénticos a `.env.example` —un `.env` recién copiado no contiene ningún
+    secreto— y los demasiado cortos, que darían más falsos positivos que otra
+    cosa. De estos últimos avisa: un hueco silencioso es justo lo que hay que
+    evitar.
+    """
+    if not ENV_FILE.is_file():
+        return []
+    try:
+        texto = ENV_FILE.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+
+    ejemplos = _valores_de_ejemplo()
+    valores: list[str] = []
+    cortos: list[str] = []
+    for clave, valor in _pares_env(texto):
+        if not valor or _ENV_YA_CUBIERTAS.search(clave):
+            continue
+        if valor in ejemplos:
+            continue
+        if len(valor) < _LARGO_MINIMO:
+            cortos.append(clave)
+            continue
+        valores.append(valor)
+
+    if cortos:
+        print(
+            f"AVISO: {', '.join(cortos)} de .env no entra en la comparación literal:\n"
+            f"       menos de {_LARGO_MINIMO} caracteres daría falsos positivos por todas\n"
+            "       partes. Ese valor sólo está protegido por los patrones.\n",
+            file=sys.stderr,
+        )
+    return valores
+
+
+def all_denied_values() -> list[str]:
+    """Unir los valores de `.env` y `.secret-values`, sin repetir."""
+    vistos: set[str] = set()
+    union: list[str] = []
+    for valor in (*env_values(), *denylisted_values()):
+        if valor not in vistos:
+            vistos.add(valor)
+            union.append(valor)
+    return union
+
+
 def denylisted_values() -> list[str]:
     """Leer los valores literales prohibidos del archivo local, si existe."""
     if not DENYLIST_FILE.is_file():
@@ -132,10 +224,10 @@ def denylisted_values() -> list[str]:
 _TIJERAS = re.compile(r"^#\s*-+\s*>8\s*-+")
 
 AVISO_SIN_DENYLIST = (
-    "AVISO: no hay .secret-values. Los patrones de abajo cazan IPs, puertos y\n"
-    "       URLs con credenciales, pero NO un valor real citado en medio de una\n"
-    "       frase. Copia .secret-values.example a .secret-values y pon ahí tu\n"
-    "       contraseña, tu usuario y tu SSID reales para cerrar ese hueco.\n"
+    "AVISO: no hay ningún valor con el que comparar (ni .env ni .secret-values).\n"
+    "       Los patrones cazan IPs, puertos y URLs con credenciales, pero NO un\n"
+    "       valor real citado en medio de una frase. Copia .env.example a .env y\n"
+    "       rellénalo para cerrar ese hueco.\n"
 )
 
 
@@ -156,7 +248,7 @@ def _denylist_hits(line: str, denylist: list[str]) -> list[str]:
 
 def scan_message(path: Path) -> list[str]:
     """Buscar valores prohibidos en el archivo del mensaje de commit."""
-    denylist = denylisted_values()
+    denylist = all_denied_values()
     if not denylist:
         print(AVISO_SIN_DENYLIST, file=sys.stderr)
         return []
@@ -173,8 +265,8 @@ def scan_message(path: Path) -> list[str]:
         if line.startswith("#"):
             continue
         findings.extend(
-            f"mensaje de commit, línea {lineno}: [valor-prohibido] Un valor "
-            f"de .secret-values aparece en el mensaje ({etiqueta})."
+            f"mensaje de commit, línea {lineno}: [valor-prohibido] Un valor real "
+            f"de .env o .secret-values aparece en el mensaje ({etiqueta})."
             for etiqueta in _denylist_hits(line, denylist)
         )
     return findings
@@ -211,7 +303,7 @@ def main(argv: list[str]) -> int:
 
     paths = [Path(a).resolve() for a in argv] if argv else tracked_files()
     findings: list[str] = []
-    denylist = denylisted_values()
+    denylist = all_denied_values()
 
     if not denylist:
         print(AVISO_SIN_DENYLIST, file=sys.stderr)
@@ -229,8 +321,8 @@ def main(argv: list[str]) -> int:
 
         for lineno, line in enumerate(text.splitlines(), start=1):
             findings.extend(
-                f"{rel}:{lineno}: [valor-prohibido] Un valor de "
-                f".secret-values aparece en este archivo ({etiqueta})."
+                f"{rel}:{lineno}: [valor-prohibido] Un valor real de "
+                f".env o .secret-values aparece en este archivo ({etiqueta})."
                 for etiqueta in _denylist_hits(line, denylist)
             )
             for name, pattern, hint in CHECKS:
@@ -244,7 +336,12 @@ def main(argv: list[str]) -> int:
     if findings:
         return _report(findings, "Sustitúyelos por marcadores antes de hacer commit.")
 
-    extra = f", {len(denylist)} valores prohibidos" if denylist else ""
+    fuentes = []
+    if env_values():
+        fuentes.append(".env")
+    if denylisted_values():
+        fuentes.append(".secret-values")
+    extra = f", {len(denylist)} valores prohibidos ({' + '.join(fuentes)})" if denylist else ""
     print(f"OK: {len(paths)} archivos revisados{extra}, ningún dato real detectado.")
     return 0
 

@@ -144,17 +144,22 @@ Cuatro capas lo impiden:
 
 1. **`.gitignore`** — ignora `secrets.yaml`, `.env`, salidas de la sonda
    (`probe-*.json`) y la carpeta `manual/`.
-2. **`.secret-values`** — un archivo **local, ignorado por git**, con tus valores
-   reales, uno por línea. `check_no_secrets.py` falla si alguno aparece en un
-   archivo versionado. Es la única capa que caza un valor real citado en medio
-   de una frase, donde ningún patrón genérico lo reconoce como secreto. Empieza
-   copiando `.secret-values.example`:
+2. **Comparación contra tus valores reales** — `check_no_secrets.py` lee tu
+   `.env` local y falla si alguno de esos valores aparece en un archivo
+   versionado **o en el mensaje de commit**, aunque esté suelto en medio de una
+   frase, que es donde ningún patrón genérico lo reconoce como secreto.
+   Reconoce además la forma percent-encoded y los escapes de XML/HTML: se
+   descodifica la línea antes de comparar.
 
    ```bash
-   cp .secret-values.example .secret-values
-   # edítalo y pon tu IP, tu puerto, tu usuario, tu contraseña y tu SSID
+   cp .env.example .env
+   # edítalo y pon tu usuario, tu contraseña y tu SSID reales
    ```
 
+   Rotas las credenciales en `.env` y el detector se entera solo; no hay un
+   segundo archivo que recordar. (`.secret-values` sigue existiendo, opcional,
+   para valores sueltos que no caben en `.env`: la contraseña anterior, otra
+   cámara, el router.)
 3. **`tools/check_no_secrets.py`** — falla si encuentra una IP privada, un
    `usr=`/`pwd=` con valor real o un puerto no estándar en una URL.
 4. **gitleaks** — con reglas propias en `.gitleaks.toml`, tanto en `pre-commit`
@@ -164,12 +169,19 @@ Activa los ganchos en local con:
 
 ```bash
 pip install pre-commit
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
+
+El `--hook-type commit-msg` no es opcional: el mensaje de commit es un canal
+aparte, que ni el escaneo de archivos (sólo ve `git ls-files`) ni gitleaks
+(sólo ve los parches) miran. Ahí estuvo una fuga real de este repositorio, y un
+mensaje ya empujado no se corrige sin reescribir el historial.
 
 Las capas 3 y 4 son patrones: cazan lo que *parece* un secreto por su forma. La
 capa 2 es una lista de valores concretos, y es la que de verdad te protege el
-día que escribas tu contraseña en una explicación del README.
+día que escribas tu contraseña en una explicación del README. Ojo: la capa 2
+**sólo puede correr en tu máquina**, porque `.env` es local y en CI no existe.
+Si no instalas los ganchos, no se ejecuta en ningún sitio.
 
 En la documentación se usan siempre marcadores: `192.0.2.10` (rango reservado
 por la RFC 5737 para ejemplos), el puerto `443` y `!secret foscam_password`.
