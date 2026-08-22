@@ -1,0 +1,49 @@
+# Configuración de gitleaks para este repositorio.
+#
+# Además de las reglas por defecto, añadimos detectores específicos de lo que
+# se nos podría escapar en un repo de integración doméstica: URLs CGI de Foscam
+# con credenciales, IPs privadas y puertos del router.
+
+title = "git_foscam"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "foscam-cgi-credentials"
+description = "URL de CGIProxy.fcgi con usr= y pwd= en claro"
+regex = '''CGIProxy\.fcgi[^"'\s]*[?&](usr|pwd)=[^&"'\s]+'''
+tags = ["foscam", "credentials"]
+
+[[rules]]
+id = "foscam-pwd-param"
+description = "Parámetro pwd= con un valor que no es un marcador"
+regex = '''(?i)[?&]pwd=(?!YOUR_|TU_|xxx|XXX|\$\{|<|%|\{\{)[^\s&"'<]{3,}'''
+tags = ["foscam", "credentials"]
+
+[[rules]]
+id = "foscam-usr-param"
+description = "Parámetro usr= con un valor que no es un marcador"
+regex = '''(?i)[?&]usr=(?!YOUR_|TU_|xxx|XXX|\$\{|<|%|\{\{)[^\s&"'<]{3,}'''
+tags = ["foscam", "credentials"]
+
+[[rules]]
+id = "private-ipv4"
+description = "Dirección IP privada codificada a fuego"
+regex = '''\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'''
+tags = ["network"]
+
+[allowlist]
+description = "Marcadores de posición y ejemplos deliberados"
+regexes = [
+  '''192\.0\.2\.\d{1,3}''',          # TEST-NET-1, reservado para documentación
+  '''203\.0\.113\.\d{1,3}''',        # TEST-NET-3
+  '''(?i)192\.168\.x\.x''',
+  '''(?i)10\.0\.0\.0/8''',
+  '''(?i)192\.168\.0\.0/16''',
+  '''(?i)172\.16\.0\.0/12''',
+]
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''(^|/)\.git/''',
+]

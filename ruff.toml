@@ -1,0 +1,18 @@
+target-version = "py313"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "D", "ASYNC", "RUF"]
+ignore = [
+  "D203",  # incompatible con D211
+  "D213",  # incompatible con D212
+  "D407",
+  "D401",  # los docstrings están en español; el chequeo de modo imperativo es para inglés
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["D"]
+"tools/*" = ["D"]
+
+[lint.pydocstyle]
+convention = "pep257"

@@ -1,0 +1,240 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conecta con tu cámara Foscam",
+        "description": "Introduce la dirección de la cámara en tu red y una cuenta con privilegios de administrador. Los ajustes de detección de movimiento requieren permisos de admin.",
+        "data": {
+          "host": "Dirección o IP",
+          "port": "Puerto",
+          "username": "Usuario",
+          "password": "Contraseña",
+          "ssl": "Usar HTTPS",
+          "verify_ssl": "Verificar el certificado TLS"
+        },
+        "data_description": {
+          "port": "El puerto de la API CGI, no el del panel web. Suelen ser distintos.",
+          "verify_ssl": "Las Foscam traen un certificado autofirmado, así que déjalo desactivado salvo que hayas instalado el tuyo."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Vuelve a introducir las credenciales",
+        "data": {
+          "username": "Usuario",
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se ha podido contactar con la cámara. Revisa la dirección, el puerto y si HTTPS es correcto.",
+      "invalid_auth": "La cámara ha rechazado esas credenciales, o la cuenta no es de administrador.",
+      "unknown": "Error inesperado."
+    },
+    "abort": {
+      "already_configured": "Esta cámara ya está configurada.",
+      "reauth_successful": "Credenciales actualizadas."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Foscam",
+        "data": {
+          "scan_interval_state": "Sondeo del estado en vivo (segundos)",
+          "scan_interval_config": "Sondeo de la configuración (segundos)",
+          "verify_ssl": "Verificar el certificado TLS",
+          "web_url": "URL del panel web"
+        },
+        "data_description": {
+          "scan_interval_state": "Cada cuánto se leen el movimiento, la tarjeta SD y el wifi. Menos segundos es más reactivo pero castiga más a la cámara.",
+          "web_url": "Opcional. Aparece como el enlace «Visitar» del dispositivo; útil porque el panel web suele estar en un puerto distinto al de la API CGI."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "motion_detection": {
+        "name": "Detección de movimiento"
+      },
+      "infra_led": {
+        "name": "LED infrarrojo"
+      },
+      "siren": {
+        "name": "Sirena"
+      },
+      "linkage_ring": {
+        "name": "Al detectar: zumbador"
+      },
+      "linkage_mail": {
+        "name": "Al detectar: email"
+      },
+      "linkage_snap": {
+        "name": "Al detectar: foto"
+      },
+      "linkage_record": {
+        "name": "Al detectar: grabar"
+      }
+    },
+    "binary_sensor": {
+      "motion": {
+        "name": "Movimiento"
+      },
+      "sound": {
+        "name": "Sonido"
+      },
+      "io_alarm": {
+        "name": "Entrada de alarma externa"
+      },
+      "recording": {
+        "name": "Grabando"
+      },
+      "wifi": {
+        "name": "Wifi"
+      },
+      "sd_problem": {
+        "name": "Problema con la tarjeta SD"
+      }
+    },
+    "sensor": {
+      "motion_status": {
+        "name": "Estado de la detección",
+        "state": {
+          "disabled": "Desactivada",
+          "idle": "Sin alarma",
+          "detected": "Detectado"
+        }
+      },
+      "sound_status": {
+        "name": "Estado de la detección de sonido",
+        "state": {
+          "disabled": "Desactivada",
+          "idle": "Sin alarma",
+          "detected": "Detectado"
+        }
+      },
+      "sd_status": {
+        "name": "Tarjeta SD",
+        "state": {
+          "no_card": "Sin tarjeta",
+          "ok": "Correcta",
+          "read_only": "Sólo lectura"
+        }
+      },
+      "sd_free_space": {
+        "name": "Espacio libre en la SD"
+      },
+      "sd_total_space": {
+        "name": "Espacio total de la SD"
+      },
+      "sd_used_percent": {
+        "name": "SD ocupada"
+      },
+      "wifi_ssid": {
+        "name": "Red conectada"
+      },
+      "infra_led_mode": {
+        "name": "Modo del infrarrojo",
+        "state": {
+          "auto": "Automático",
+          "manual": "Manual"
+        }
+      },
+      "firmware_version": {
+        "name": "Firmware"
+      },
+      "ntp_status": {
+        "name": "NTP",
+        "state": {
+          "disabled": "Desactivado",
+          "success": "Correcto",
+          "failed": "Fallo"
+        }
+      },
+      "ddns_status": {
+        "name": "DDNS",
+        "state": {
+          "disabled": "Desactivado",
+          "success": "Correcto",
+          "failed": "Fallo"
+        }
+      },
+      "upnp_status": {
+        "name": "UPnP",
+        "state": {
+          "disabled": "Desactivado",
+          "success": "Correcto",
+          "failed": "Fallo"
+        }
+      }
+    },
+    "number": {
+      "sensitivity": {
+        "name": "Sensibilidad de movimiento"
+      },
+      "trigger_interval": {
+        "name": "Intervalo de disparo"
+      },
+      "snap_interval": {
+        "name": "Intervalo entre fotos"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reiniciar cámara"
+      },
+      "full_coverage": {
+        "name": "Detectar todo el día, toda la imagen"
+      }
+    }
+  },
+  "services": {
+    "cgi_command": {
+      "name": "Ejecutar comando CGI",
+      "description": "Envía cualquier comando de lectura o escritura a la API CGI de la cámara y devuelve la respuesta ya parseada.",
+      "fields": {
+        "device_id": {
+          "name": "Cámara",
+          "description": "La cámara Foscam con la que hablar."
+        },
+        "command": {
+          "name": "Comando",
+          "description": "Nombre del comando CGI, por ejemplo getDevState."
+        },
+        "params": {
+          "name": "Parámetros",
+          "description": "Parámetros extra de la consulta, como pares clave/valor."
+        }
+      }
+    },
+    "set_motion_config": {
+      "name": "Cambiar ajustes de detección",
+      "description": "Cambia campos sueltos de la detección de movimiento sin tocar el resto de ajustes.",
+      "fields": {
+        "device_id": {
+          "name": "Cámara",
+          "description": "La cámara Foscam a configurar."
+        },
+        "params": {
+          "name": "Campos",
+          "description": "Campos a cambiar, por ejemplo sensitivity o triggerInterval."
+        }
+      }
+    },
+    "snapshot": {
+      "name": "Guardar foto",
+      "description": "Pide una foto fija a la cámara y la guarda en un archivo.",
+      "fields": {
+        "device_id": {
+          "name": "Cámara",
+          "description": "La cámara Foscam de la que sacar la foto."
+        },
+        "filename": {
+          "name": "Nombre del archivo",
+          "description": "Ruta completa, que debe estar dentro de allowlist_external_dirs."
+        }
+      }
+    }
+  },
+  "exceptions": {}
+}

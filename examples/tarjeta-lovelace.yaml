@@ -1,0 +1,40 @@
+# Tarjeta para el panel. Pégala en el editor YAML de una tarjeta manual.
+# Sustituye `foscam_dormitorio` por el nombre de tu dispositivo.
+
+type: vertical-stack
+cards:
+  - type: picture-glance
+    title: Dormitorio
+    camera_image: camera.foscam_dormitorio
+    camera_view: live
+    entities:
+      - entity: switch.foscam_dormitorio_deteccion_de_movimiento
+      - entity: binary_sensor.foscam_dormitorio_movimiento
+      - entity: sensor.foscam_dormitorio_tarjeta_sd
+
+  - type: entities
+    title: Detección de movimiento
+    entities:
+      - entity: switch.foscam_dormitorio_deteccion_de_movimiento
+        name: Detección
+      - entity: sensor.foscam_dormitorio_estado_de_la_deteccion
+        name: Estado
+      - entity: number.foscam_dormitorio_sensibilidad_de_movimiento
+        name: Sensibilidad
+      - entity: number.foscam_dormitorio_intervalo_de_disparo
+        name: Intervalo de disparo
+      - type: section
+        label: Al detectar
+      - entity: switch.foscam_dormitorio_al_detectar_foto
+      - entity: switch.foscam_dormitorio_al_detectar_grabar
+
+  - type: entities
+    title: Estado del dispositivo
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.foscam_dormitorio_wifi
+      - entity: sensor.foscam_dormitorio_red_conectada
+      - entity: sensor.foscam_dormitorio_tarjeta_sd
+      - entity: sensor.foscam_dormitorio_sd_ocupada
+      - entity: sensor.foscam_dormitorio_espacio_libre_en_la_sd
+      - entity: sensor.foscam_dormitorio_modo_del_infrarrojo

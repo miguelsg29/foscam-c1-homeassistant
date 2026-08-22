@@ -1,0 +1,139 @@
+# Ejemplos de automatizaciones con la integración Foscam C1.
+#
+# Sustituye `foscam_dormitorio` por el nombre que le hayas dado al dispositivo.
+# Los identificadores de persona, luces y demás son de ejemplo: cámbialos por
+# los tuyos.
+
+# ---------------------------------------------------------------------------
+# Activar la detección al salir de casa.
+#
+# Respecto a la versión con `switch.foscam_dormitorio_motion` sólo cambia el
+# entity_id. De paso, las acciones de dispositivo (`type: turn_off` +
+# `device_id`) se han convertido en llamadas por entidad: hacen lo mismo y
+# sobreviven a que cambies el dispositivo de sitio o lo vuelvas a emparejar.
+# ---------------------------------------------------------------------------
+- alias: Sistema - Salir de casa
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: person.ejemplo
+      to: not_home
+  conditions:
+    - condition: state
+      entity_id: input_boolean.modo_alguien_en_casa
+      state: "off"
+  actions:
+    - action: switch.turn_on
+      target:
+        entity_id: switch.foscam_dormitorio_deteccion_de_movimiento
+    - action: light.turn_off
+      target:
+        entity_id:
+          - light.dormitorio
+          - light.pasillo_dormitorio
+          - light.bano_espejo
+    - action: fan.turn_off
+      target:
+        entity_id: fan.purificador
+    - action: switch.turn_off
+      target:
+        entity_id: switch.bano_derecha
+
+# ---------------------------------------------------------------------------
+# Desactivar la detección al llegar a casa.
+#
+# Lleva la misma condición que la automatización de salida. Sin ella, si vuelve
+# una persona mientras otra sigue fuera, la cámara se apagaba igualmente.
+# ---------------------------------------------------------------------------
+- alias: Sistema - En casa
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: person.ejemplo
+      to: home
+  actions:
+    - action: switch.turn_off
+      target:
+        entity_id: switch.foscam_dormitorio_deteccion_de_movimiento
+    - action: fan.turn_on
+      target:
+        entity_id: fan.purificador
+      data:
+        percentage: 100
+    - action: notify.mobile_app_movil
+      data:
+        title: Casa
+        message: Activado el modo en casa
+
+# ---------------------------------------------------------------------------
+# Aviso con foto cuando la propia cámara detecta movimiento.
+#
+# Complementa al sensor de movimiento Tuya en vez de sustituirlo: un sensor PIR
+# dedicado es más rápido y da menos falsos positivos que la detección por vídeo,
+# pero la cámara ve cosas que el PIR no cubre.
+# ---------------------------------------------------------------------------
+- alias: Dormitorio - Aviso al detectar movimiento en la cámara
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.foscam_dormitorio_movimiento
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: person.ejemplo
+      state: not_home
+  actions:
+    - action: foscam_c1.snapshot
+      data:
+        device_id: "{{ device_id('binary_sensor.foscam_dormitorio_movimiento') }}"
+        filename: "/config/www/foscam/ultima.jpg"
+    - action: notify.mobile_app_movil
+      data:
+        title: Dormitorio
+        message: La cámara ha detectado movimiento
+        data:
+          image: /local/foscam/ultima.jpg
+
+# ---------------------------------------------------------------------------
+# Bajar la sensibilidad de noche.
+#
+# Con el montaje anterior esto era arriesgado: cada llamada a
+# setMotionDetectConfig había que enviarla con los veinte parámetros o se
+# perdían los horarios y las áreas. Ahora es un número.
+# ---------------------------------------------------------------------------
+- alias: Foscam - Sensibilidad reducida de noche
+  mode: single
+  triggers:
+    - trigger: sun
+      event: sunset
+      id: noche
+    - trigger: sun
+      event: sunrise
+      id: dia
+  actions:
+    - action: number.set_value
+      target:
+        entity_id: number.foscam_dormitorio_sensibilidad_de_movimiento
+      data:
+        value: "{{ 1 if trigger.id == 'noche' else 3 }}"
+
+# ---------------------------------------------------------------------------
+# Avisar si la tarjeta SD se llena o falla.
+# ---------------------------------------------------------------------------
+- alias: Foscam - Problema con la tarjeta SD
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.foscam_dormitorio_problema_con_la_tarjeta_sd
+      to: "on"
+      for: "00:05:00"
+    - trigger: numeric_state
+      entity_id: sensor.foscam_dormitorio_sd_ocupada
+      above: 95
+  actions:
+    - action: notify.mobile_app_movil
+      data:
+        title: Foscam
+        message: >-
+          Revisa la tarjeta SD de la cámara del dormitorio
+          ({{ states('sensor.foscam_dormitorio_sd_ocupada') }} % ocupada).

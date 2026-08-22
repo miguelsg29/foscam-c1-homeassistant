@@ -1,0 +1,240 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your Foscam camera",
+        "description": "Enter the camera's LAN address and an account with administrator privileges. Motion detection settings require admin rights.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use HTTPS",
+          "verify_ssl": "Verify the TLS certificate"
+        },
+        "data_description": {
+          "port": "The CGI port, not the web panel port. They are often different.",
+          "verify_ssl": "Foscam cameras ship a self-signed certificate, so leave this off unless you installed your own."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter your camera credentials",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the camera. Check the address, the port and whether HTTPS is right.",
+      "invalid_auth": "The camera rejected those credentials, or the account is not an administrator.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This camera is already configured.",
+      "reauth_successful": "Credentials updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Foscam options",
+        "data": {
+          "scan_interval_state": "Live state polling (seconds)",
+          "scan_interval_config": "Settings polling (seconds)",
+          "verify_ssl": "Verify the TLS certificate",
+          "web_url": "Web panel URL"
+        },
+        "data_description": {
+          "scan_interval_state": "How often motion, SD card and Wi-Fi state are read. Lower is more responsive but hits the camera harder.",
+          "web_url": "Optional. Shown as the device's 'Visit' link, useful when the web panel listens on a different port than the CGI API."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "motion_detection": {
+        "name": "Motion detection"
+      },
+      "infra_led": {
+        "name": "Infrared LED"
+      },
+      "siren": {
+        "name": "Siren"
+      },
+      "linkage_ring": {
+        "name": "Alarm on motion: buzzer"
+      },
+      "linkage_mail": {
+        "name": "Alarm on motion: email"
+      },
+      "linkage_snap": {
+        "name": "Alarm on motion: snapshot"
+      },
+      "linkage_record": {
+        "name": "Alarm on motion: recording"
+      }
+    },
+    "binary_sensor": {
+      "motion": {
+        "name": "Motion"
+      },
+      "sound": {
+        "name": "Sound"
+      },
+      "io_alarm": {
+        "name": "External alarm input"
+      },
+      "recording": {
+        "name": "Recording"
+      },
+      "wifi": {
+        "name": "Wi-Fi"
+      },
+      "sd_problem": {
+        "name": "SD card problem"
+      }
+    },
+    "sensor": {
+      "motion_status": {
+        "name": "Motion detection status",
+        "state": {
+          "disabled": "Disabled",
+          "idle": "No alarm",
+          "detected": "Motion detected"
+        }
+      },
+      "sound_status": {
+        "name": "Sound detection status",
+        "state": {
+          "disabled": "Disabled",
+          "idle": "No alarm",
+          "detected": "Motion detected"
+        }
+      },
+      "sd_status": {
+        "name": "SD card",
+        "state": {
+          "no_card": "No card",
+          "ok": "OK",
+          "read_only": "Read only"
+        }
+      },
+      "sd_free_space": {
+        "name": "SD free space"
+      },
+      "sd_total_space": {
+        "name": "SD total space"
+      },
+      "sd_used_percent": {
+        "name": "SD used"
+      },
+      "wifi_ssid": {
+        "name": "Connected network"
+      },
+      "infra_led_mode": {
+        "name": "Infrared mode",
+        "state": {
+          "auto": "Auto",
+          "manual": "Manual"
+        }
+      },
+      "firmware_version": {
+        "name": "Firmware"
+      },
+      "ntp_status": {
+        "name": "NTP",
+        "state": {
+          "disabled": "Disabled",
+          "success": "Connected",
+          "failed": "Failed"
+        }
+      },
+      "ddns_status": {
+        "name": "DDNS",
+        "state": {
+          "disabled": "Disabled",
+          "success": "Connected",
+          "failed": "Failed"
+        }
+      },
+      "upnp_status": {
+        "name": "UPnP",
+        "state": {
+          "disabled": "Disabled",
+          "success": "Connected",
+          "failed": "Failed"
+        }
+      }
+    },
+    "number": {
+      "sensitivity": {
+        "name": "Motion sensitivity"
+      },
+      "trigger_interval": {
+        "name": "Trigger interval"
+      },
+      "snap_interval": {
+        "name": "Snapshot interval"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reboot camera"
+      },
+      "full_coverage": {
+        "name": "Detect all day, whole frame"
+      }
+    }
+  },
+  "services": {
+    "cgi_command": {
+      "name": "Run CGI command",
+      "description": "Sends any read or write command to the camera's CGI API and returns the parsed response.",
+      "fields": {
+        "device_id": {
+          "name": "Camera",
+          "description": "The Foscam camera to talk to."
+        },
+        "command": {
+          "name": "Command",
+          "description": "CGI command name, for example getDevState."
+        },
+        "params": {
+          "name": "Parameters",
+          "description": "Extra query parameters as key/value pairs."
+        }
+      }
+    },
+    "set_motion_config": {
+      "name": "Set motion detection settings",
+      "description": "Changes individual motion detection fields, keeping every other setting intact.",
+      "fields": {
+        "device_id": {
+          "name": "Camera",
+          "description": "The Foscam camera to configure."
+        },
+        "params": {
+          "name": "Fields",
+          "description": "Fields to change, for example sensitivity or triggerInterval."
+        }
+      }
+    },
+    "snapshot": {
+      "name": "Save snapshot",
+      "description": "Asks the camera for a still image and writes it to a file.",
+      "fields": {
+        "device_id": {
+          "name": "Camera",
+          "description": "The Foscam camera to snapshot."
+        },
+        "filename": {
+          "name": "File name",
+          "description": "Full path, which must be inside allowlist_external_dirs."
+        }
+      }
+    }
+  },
+  "exceptions": {}
+}

@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# Secretos y datos de la instalación real. NADA de esto debe llegar a GitHub.
+# ---------------------------------------------------------------------------
+secrets.yaml
+secrets.yml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+credentials*
+*_secret*
+*.secret
+# ...pero el propio detector sí se versiona
+!tools/check_no_secrets.py
+
+# Salidas de la herramienta de sondeo: contienen respuestas reales de la cámara
+# (MAC, número de serie, SSID, DDNS...).
+probe-*.json
+probe-*.txt
+tools/output/
+
+# Manual del fabricante (documento con copyright de Foscam, no se redistribuye)
+manual/
+
+# Home Assistant
+.storage/
+home-assistant.log*
+home-assistant_v2.db*
+.HA_VERSION
+config/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage*
+*.egg-info/
+dist/
+build/
+
+# Restos de la instalación (borrables sin miedo)
+_to_delete/
+*.zip
+
+# Editores y SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,15 @@
+{
+  "domain": "foscam_c1",
+  "name": "Foscam C1 (CGI)",
+  "codeowners": [
+    "@miguelsg29"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/miguelsg29/foscam-c1-homeassistant",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/miguelsg29/foscam-c1-homeassistant/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

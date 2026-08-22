@@ -1,0 +1,43 @@
+cgi_command:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: foscam_c1
+    command:
+      required: true
+      example: getDevState
+      selector:
+        text:
+    params:
+      required: false
+      example: '{"mode": "1"}'
+      selector:
+        object:
+
+set_motion_config:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: foscam_c1
+    params:
+      required: true
+      example: '{"sensitivity": "3", "triggerInterval": "10"}'
+      selector:
+        object:
+
+snapshot:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: foscam_c1
+    filename:
+      required: true
+      example: /config/www/foscam/dormitorio.jpg
+      selector:
+        text:
