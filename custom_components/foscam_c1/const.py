@@ -25,10 +25,37 @@ DEFAULT_INFO_INTERVAL: Final = 900
 DEFAULT_TIMEOUT: Final = 10
 
 # El flujo principal da mas calidad; el secundario aguanta mejor una red pobre.
-STREAM_MAIN: Final = "Main"
-STREAM_SUB: Final = "Sub"
+#
+# En minusculas a proposito: hassfest exige que las claves de traduccion de un
+# selector casen con [a-z0-9-_]+, y estos valores SON las claves. El nombre que
+# espera la URL RTSP es otra cosa (videoMain/videoSub), y va en STREAM_PATHS.
+STREAM_MAIN: Final = "main"
+STREAM_SUB: Final = "sub"
 STREAMS: Final = [STREAM_MAIN, STREAM_SUB]
 DEFAULT_STREAM: Final = STREAM_MAIN
+
+#: {clave de configuracion: ruta dentro de la URL RTSP}
+STREAM_PATHS: Final = {
+    STREAM_MAIN: "videoMain",
+    STREAM_SUB: "videoSub",
+}
+
+
+def normalize_stream(valor: object) -> str:
+    """Normalizar el flujo guardado a una de las claves válidas.
+
+    La 1.1.0 guardaba "Main"/"Sub" con mayúscula inicial y hassfest obligó a
+    pasarlas a minúscula. Las entradas creadas con aquella versión siguen ahí,
+    así que hay dos sitios que tienen que tragarlas: la URL RTSP, que si no se
+    quedaría sin flujo, y el desplegable de opciones, que rechaza un valor por
+    defecto que no esté entre los suyos y deja el formulario sin abrir.
+
+    Vive aquí y no en `config_flow.py` para que se pueda probar sin Home
+    Assistant instalado, que es como corre la suite.
+    """
+    clave = str(valor).lower()
+    return clave if clave in STREAMS else DEFAULT_STREAM
+
 
 # Los modelos nuevos admiten RTSP en 88 y 554; los antiguos, en 88 y 65534.
 # El 88 es el unico comun a todos, asi que es el valor por defecto.

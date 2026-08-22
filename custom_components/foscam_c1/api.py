@@ -26,6 +26,8 @@ from .const import (
     DEFAULT_TIMEOUT,
     MOTION_VARIANT_LEGACY,
     MOTION_VARIANT_V1,
+    STREAM_PATHS,
+    normalize_stream,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -354,12 +356,17 @@ class FoscamClient:
         por donde salga, y confundirlas da un fallo de credenciales que parece
         una contrasena mal escrita.
 
+        `stream` es la clave de configuracion (`main`/`sub`), no la ruta: la
+        clave va en minuscula porque hassfest lo exige para las traducciones del
+        selector, mientras que la URL quiere `videoMain`/`videoSub`.
+
         La URL lleva la contrasena dentro, asi que no debe registrarse nunca en
         el log ni exponerse como atributo de una entidad.
         """
         user = quote(self._username, safe="")
         password = quote(self._password, safe="")
-        return f"rtsp://{user}:{password}@{self._host}:{port}/video{stream}"
+        ruta = STREAM_PATHS[normalize_stream(stream)]
+        return f"rtsp://{user}:{password}@{self._host}:{port}/{ruta}"
 
     async def async_snapshot(self) -> bytes:
         """Pedir una foto fija a la cámara."""

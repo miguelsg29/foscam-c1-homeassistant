@@ -333,7 +333,7 @@ def test_rtsp_url_percent_encodes_the_credentials(api):
     client = api.FoscamClient(
         session, "192.0.2.10", 443, "camera_user", "Aq^Ub*Kx2Zt7", ssl=True, verify_ssl=False
     )
-    url = client.rtsp_url("Main", 88)
+    url = client.rtsp_url("main", 88)
     assert url == "rtsp://camera_user:Aq%5EUb%2AKx2Zt7@192.0.2.10:88/videoMain"
 
 
@@ -343,15 +343,15 @@ def test_rtsp_url_escapes_what_would_break_the_authority(api):
     client = api.FoscamClient(
         session, "192.0.2.10", 443, "us:er", "a@b/c", ssl=True, verify_ssl=False
     )
-    url = client.rtsp_url("Sub", 554)
+    url = client.rtsp_url("sub", 554)
     assert url == "rtsp://us%3Aer:a%40b%2Fc@192.0.2.10:554/videoSub"
 
 
 def test_rtsp_url_uses_the_requested_stream_and_port(api):
     session = FakeSession()
     client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
-    assert client.rtsp_url("Main", 65534).endswith(":65534/videoMain")
-    assert client.rtsp_url("Sub", 88).endswith(":88/videoSub")
+    assert client.rtsp_url("main", 65534).endswith(":65534/videoMain")
+    assert client.rtsp_url("sub", 88).endswith(":88/videoSub")
 
 
 def test_rtsp_url_is_independent_of_the_cgi_scheme(api):
@@ -359,5 +359,23 @@ def test_rtsp_url_is_independent_of_the_cgi_scheme(api):
     # distintos, y confundirlos daba una URL que ffmpeg no abre.
     session = FakeSession()
     client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
-    assert client.rtsp_url("Main", 88).startswith("rtsp://")
+    assert client.rtsp_url("main", 88).startswith("rtsp://")
     assert client.base_url.startswith("https://")
+
+
+def test_rtsp_url_still_accepts_the_1_1_0_capitalised_values(api):
+    # 1.1.0 guardaba "Main"/"Sub" en la entrada de configuracion. hassfest
+    # obligo a pasarlas a minuscula, pero esas entradas siguen existiendo y no
+    # deben quedarse sin directo por un cambio de nombre interno.
+    session = FakeSession()
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert client.rtsp_url("Main", 88).endswith("/videoMain")
+    assert client.rtsp_url("Sub", 88).endswith("/videoSub")
+
+
+def test_rtsp_url_falls_back_to_main_for_an_unknown_stream(api):
+    # Mejor el flujo principal que una URL con una ruta inventada que ffmpeg
+    # no sabria abrir.
+    session = FakeSession()
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert client.rtsp_url("loquesea", 88).endswith("/videoMain")

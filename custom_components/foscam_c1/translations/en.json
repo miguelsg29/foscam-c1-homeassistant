@@ -270,8 +270,8 @@
   "selector": {
     "stream": {
       "options": {
-        "Main": "Main",
-        "Sub": "Sub"
+        "main": "Main",
+        "sub": "Sub"
       }
     }
   }

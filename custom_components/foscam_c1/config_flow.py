@@ -46,6 +46,7 @@ from .const import (
     MAX_SCAN_INTERVAL_STATE,
     MIN_SCAN_INTERVAL_STATE,
     STREAMS,
+    normalize_stream,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ STREAM_SELECTOR = SelectSelector(
         translation_key="stream",
     )
 )
+
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -217,7 +219,7 @@ class FoscamOptionsFlow(OptionsFlow):
                 ): bool,
                 vol.Required(
                     CONF_STREAM,
-                    default=current.get(CONF_STREAM, DEFAULT_STREAM),
+                    default=normalize_stream(current.get(CONF_STREAM, DEFAULT_STREAM)),
                 ): STREAM_SELECTOR,
                 # 0 desactiva el directo y deja solo la foto fija, que es lo
                 # util si la camara tiene el RTSP cerrado.
