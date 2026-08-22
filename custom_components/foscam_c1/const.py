@@ -89,6 +89,15 @@ CMD_CLOSE_INFRA: Final = "closeInfraLed"
 CMD_SNAP: Final = "snapPicture2"
 CMD_REBOOT: Final = "rebootSystem"
 
+# Audio del dispositivo y LED de estado. Todos opcionales: se sondean al
+# arrancar y las entidades sólo se crean si la cámara responde.
+CMD_GET_VOLUME: Final = "getAudioVolume"
+CMD_SET_VOLUME: Final = "setAudioVolume"
+CMD_GET_VOICE: Final = "getVoiceEnableState"
+CMD_SET_VOICE: Final = "setVoiceEnableState"
+CMD_GET_LED: Final = "getLedEnableState"
+CMD_SET_LED: Final = "setLedEnableState"
+
 # Las dos alarmas que se configuran igual: movimiento y sonido. Comparten la
 # forma de los parámetros (isEnable, linkage, sensitivity, triggerInterval,
 # scheduleN) y el mismo problema: escribir es destructivo.
@@ -112,7 +121,12 @@ SENSITIVITY_MAX: Final = {
     MOTION_VARIANT_V1: 100,
 }
 
-# Etiquetas de sensibilidad del firmware legacy (según la guía CGI de Foscam).
+# Etiquetas de sensibilidad del firmware legacy.
+#
+# El valor NO es una escala: es un enum cuyo orden no tiene nada que ver con la
+# sensibilidad. El 2 es el más sensible y el 4 el menos, así que presentarlo
+# como un deslizador 0-4 hace creer justo lo contrario. Verificado contra la
+# app del fabricante en agosto de 2026.
 SENSITIVITY_LABELS_LEGACY: Final = {
     0: "low",
     1: "normal",
@@ -120,6 +134,28 @@ SENSITIVITY_LABELS_LEGACY: Final = {
     3: "lower",
     4: "lowest",
 }
+
+#: El orden en que los muestra la app, de más a menos sensible.
+SENSITIVITY_ORDER_LEGACY: Final = ["high", "normal", "low", "lower", "lowest"]
+
+#: {etiqueta: valor} para escribir.
+SENSITIVITY_VALUES_LEGACY: Final = {v: k for k, v in SENSITIVITY_LABELS_LEGACY.items()}
+
+# --- LED infrarrojo ------------------------------------------------------------
+# `mode` 0 es automático y 1 manual; encendido y apagado son dos comandos
+# aparte que además exigen estar en manual. Las tres cosas que le importan al
+# usuario son un único desplegable.
+INFRA_AUTO: Final = "auto"
+INFRA_ON: Final = "on"
+INFRA_OFF: Final = "off"
+INFRA_CHOICES: Final = [INFRA_AUTO, INFRA_ON, INFRA_OFF]
+
+INFRA_MODE_AUTO: Final = 0
+INFRA_MODE_MANUAL: Final = 1
+
+# --- Volumen -------------------------------------------------------------------
+VOLUME_MIN: Final = 0
+VOLUME_MAX: Final = 100
 
 # --- Bits del campo `linkage` --------------------------------------------------
 # bit0: Ring (zumbador)  bit1: Mail  bit2: Snap (foto)  bit3: Record (vídeo)

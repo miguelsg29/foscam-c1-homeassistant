@@ -118,3 +118,45 @@ def test_stale_capitalised_stream_is_normalised():
     # Toda clave normalizada tiene ruta: el indexado de api.py no puede fallar.
     for valor in ("Main", "Sub", "main", "sub", "loquesea", None):
         assert const.normalize_stream(valor) in const.STREAM_PATHS
+
+
+def test_sensitivity_labels_match_the_camera_app():
+    # Comprobado por el usuario contra la app del fabricante: Alta=2, Medio=1,
+    # Bajo=0, Mas baja=3, La mas baja=4. No es una escala, es un enum, y el
+    # orden de presentacion va de mas a menos sensible.
+    const = _cargar_const()
+
+    assert const.SENSITIVITY_LABELS_LEGACY == {
+        0: "low",
+        1: "normal",
+        2: "high",
+        3: "lower",
+        4: "lowest",
+    }
+    assert const.SENSITIVITY_ORDER_LEGACY == ["high", "normal", "low", "lower", "lowest"]
+    assert const.SENSITIVITY_VALUES_LEGACY["high"] == 2
+    assert const.SENSITIVITY_VALUES_LEGACY["lowest"] == 4
+    # Ida y vuelta: ninguna etiqueta se pierde ni se duplica.
+    assert set(const.SENSITIVITY_ORDER_LEGACY) == set(const.SENSITIVITY_LABELS_LEGACY.values())
+    for valor, etiqueta in const.SENSITIVITY_LABELS_LEGACY.items():
+        assert const.SENSITIVITY_VALUES_LEGACY[etiqueta] == valor
+
+
+@pytest.mark.parametrize("path", ARCHIVOS, ids=lambda p: p.name)
+def test_every_select_option_has_a_translation(path):
+    # Sin la traduccion del estado, el desplegable muestra la clave cruda
+    # ("lowest") en vez del texto. Es el fallo que CLAUDE.md avisa y que nadie
+    # comprobaba.
+    const = _cargar_const()
+    entity = _cargar(path).get("entity", {}).get("select", {})
+
+    esperado = {
+        "infra_mode": const.INFRA_CHOICES,
+        "sensitivity_level": const.SENSITIVITY_ORDER_LEGACY,
+        "sound_sensitivity_level": const.SENSITIVITY_ORDER_LEGACY,
+    }
+    for clave, opciones in esperado.items():
+        assert clave in entity, f"{path.name}: falta la entidad select '{clave}'"
+        estados = entity[clave].get("state", {})
+        faltan = [o for o in opciones if o not in estados]
+        assert not faltan, f"{path.name}: '{clave}' sin traduccion para {faltan}"

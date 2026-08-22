@@ -98,6 +98,12 @@
       },
       "audio_linkage_ring": {
         "name": "On sound: buzzer"
+      },
+      "status_led": {
+        "name": "Status LED"
+      },
+      "mute": {
+        "name": "Muted"
       }
     },
     "binary_sensor": {
@@ -207,6 +213,9 @@
       },
       "sound_trigger_interval": {
         "name": "Sound trigger interval"
+      },
+      "device_volume": {
+        "name": "Device volume"
       }
     },
     "button": {
@@ -215,6 +224,36 @@
       },
       "full_coverage": {
         "name": "Detect all day, whole frame"
+      }
+    },
+    "select": {
+      "infra_mode": {
+        "name": "Infrared light",
+        "state": {
+          "auto": "Automatic",
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "sensitivity_level": {
+        "name": "Motion sensitivity",
+        "state": {
+          "high": "High",
+          "normal": "Medium",
+          "low": "Low",
+          "lower": "Lower",
+          "lowest": "Lowest"
+        }
+      },
+      "sound_sensitivity_level": {
+        "name": "Sound sensitivity",
+        "state": {
+          "high": "High",
+          "normal": "Medium",
+          "low": "Low",
+          "lower": "Lower",
+          "lowest": "Lowest"
+        }
       }
     }
   },

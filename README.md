@@ -38,13 +38,18 @@ que esta integración resuelve:
 | `switch` | Detección de movimiento | Lee el estado en vivo de `getDevState`, así que responde en segundos |
 | `switch` | Detección de sonido | Igual que la de movimiento, en los modelos que la soportan |
 | `switch` | LED infrarrojo | Sólo si el modelo responde a `getInfraLedConfig` |
+| `switch` | LED de estado | La luz azul del frontal. Sólo si responde a `getLedEnableState` |
+| `switch` | Volumen silenciado | Encendido = silenciado, igual que la app |
 | `switch` | Sirena | Sólo en modelos con sirena (la C1 no la tiene) |
 | `switch` | Al detectar: zumbador / email / foto / grabar | Los cuatro bits del campo `linkage` |
 | `switch` | Al oír: zumbador / email / foto / grabar | Lo mismo para la alarma de sonido |
 | `binary_sensor` | Movimiento, Sonido, Grabando, Wifi, Entrada de alarma, Problema con la SD | |
 | `sensor` | Estado de la detección, Tarjeta SD, Espacio libre/total/ocupado, Red conectada, Modo del infrarrojo, Firmware, NTP, DDNS, UPnP | |
-| `number` | Sensibilidad, Intervalo de disparo, Intervalo entre fotos | La escala de sensibilidad se ajusta sola al firmware (0-4 ó 0-100) |
-| `number` | Sensibilidad de sonido, Intervalo de disparo del sonido | Sólo si la cámara responde a `getAudioAlarmConfig` |
+| `select` | Luz infrarroja | Automático / Encendido / Apagado, las tres en un solo control |
+| `select` | Sensibilidad de movimiento y de sonido | Alta / Medio / Bajo / Más baja / La más baja. **Sólo en el firmware antiguo**, donde el valor es un enum y no una escala |
+| `number` | Intervalo de disparo, Intervalo entre fotos | |
+| `number` | Sensibilidad de movimiento y de sonido | Sólo en el firmware moderno, donde sí es una escala lineal 0-100 |
+| `number` | Volumen del dispositivo | 0-100. Sólo si responde a `getAudioVolume` |
 | `button` | Reiniciar cámara, Detectar todo el día en toda la imagen | |
 
 Las entidades de diagnóstico y las más ruidosas vienen **desactivadas por

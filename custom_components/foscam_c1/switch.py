@@ -120,6 +120,16 @@ async def _infra_setter(coordinator: FoscamCoordinator, value: bool) -> None:
     await coordinator.async_set_infra_led(value)
 
 
+async def _status_led_setter(coordinator: FoscamCoordinator, value: bool) -> None:
+    """Encender o apagar el LED de estado."""
+    await coordinator.async_set_status_led(value)
+
+
+async def _mute_setter(coordinator: FoscamCoordinator, value: bool) -> None:
+    """Silenciar o restablecer el sonido del dispositivo."""
+    await coordinator.async_set_muted(value)
+
+
 SWITCHES: tuple[FoscamSwitchDescription, ...] = (
     FoscamSwitchDescription(
         key="motion_detection",
@@ -138,6 +148,26 @@ SWITCHES: tuple[FoscamSwitchDescription, ...] = (
             None if data.state_int("infraLedState") < 0 else bool(data.state_int("infraLedState"))
         ),
         set_fn=_infra_setter,
+    ),
+    FoscamSwitchDescription(
+        key="status_led",
+        translation_key="status_led",
+        icon="mdi:led-outline",
+        entity_category=EntityCategory.CONFIG,
+        capability="status_led",
+        is_on_fn=lambda data: data.status_led,
+        set_fn=_status_led_setter,
+    ),
+    # Encendido = silenciado, igual que la app. El comando CGI informa de lo
+    # contrario (si la voz esta habilitada) y la inversion se hace en api.py.
+    FoscamSwitchDescription(
+        key="mute",
+        translation_key="mute",
+        icon="mdi:volume-off",
+        entity_category=EntityCategory.CONFIG,
+        capability="voice",
+        is_on_fn=lambda data: data.muted,
+        set_fn=_mute_setter,
     ),
     FoscamSwitchDescription(
         key="sound_detection",

@@ -76,7 +76,7 @@ Nunca escribas un valor real "solo como ejemplo ilustrativo". Nunca.
 
 ```bash
 ruff check . && ruff format --check .
-pytest -q                      # 44 pruebas, no necesitan Home Assistant
+pytest -q                      # 66 pruebas, no necesitan Home Assistant
 python tools/check_no_secrets.py
 gitleaks detect --config .gitleaks.toml --redact    # si lo tienes instalado
 ```
@@ -131,19 +131,21 @@ Algunas cámaras usan `-3` o un 401 de HTTP donde otras usan `-2`.
 Cualquier lógica de reintento tiene que ser tacaña.
 
 **6. La sensibilidad del comando antiguo es un enum disfrazado de número.**
-Foscam documenta 0-4, y `SENSITIVITY_LABELS_LEGACY` en `const.py` recoge lo que
-significa cada valor: `0=low, 1=normal, 2=high, 3=lower, 4=lowest`. El orden no
-es el que parece — si esa tabla es correcta, el valor más sensible es el **2** y
-el 4 es el menos sensible, justo lo contrario de lo que sugiere un deslizador
-0-4. La variante moderna sí usa una escala lineal 0-100.
+`0=low, 1=normal, 2=high, 3=lower, 4=lowest`. El orden **no** es creciente: el
+más sensible es el **2** y el 4 es el menos. Verificado contra la app del
+fabricante en agosto de 2026, que los muestra en este orden: Alta(2), Medio(1),
+Bajo(0), Más baja(3), La más baja(4).
 
-Una versión anterior de esta nota afirmaba que esta C1 devuelve 6 y en eso se
-apoyaba el ensanchado dinámico del `native_max_value`. **La app del fabricante
-llega a 4**, comprobado por el usuario en agosto de 2026, así que el 6 no está
-confirmado y no debe repetirse como un hecho. El ensanchado se queda, pero como
-red por si algún modelo devuelve un valor fuera de rango: evita dejar la entidad
-en estado inválido, y se repliega solo al rango documentado en cuanto la cámara
-vuelve a informar algo dentro de él.
+Por eso en esa variante la sensibilidad es un `select` con etiquetas y no un
+`number`: un deslizador 0-4 hace creer que el extremo derecho es el máximo
+cuando es justo el mínimo. La variante moderna sí es lineal (0-100) y ahí sigue
+siendo un `number`. Las dos entidades son excluyentes y se eligen por variante
+detectada, así que la misma cámara nunca ve las dos.
+
+Una versión anterior de esta nota afirmaba que esta C1 devuelve 6. La app llega
+a 4, así que el 6 no está confirmado y no debe repetirse como un hecho. El
+ensanchado dinámico del `native_max_value` se queda como red por si algún modelo
+informa fuera de rango.
 
 ## Arquitectura
 
@@ -157,6 +159,11 @@ vuelve a informar algo dentro de él.
   `value_fn`. `_attr_name = None` para que tome el nombre del dispositivo, y
   `CameraEntityFeature.STREAM` sólo si hay puerto RTSP configurado: con el
   puerto a 0 quedan las fotos fijas y no se ofrece un directo que fallaría.
+- `select.py` — para lo que es una lista de opciones y no un número ni un
+  interruptor. La luz infrarroja vive aquí porque sus tres estados salen de
+  **dos** lecturas distintas (`mode` dice quién decide, `infraLedState` si está
+  encendida) y de tres comandos de escritura. Presentarlo como un switch obliga
+  a esconder el modo automático.
 - Plataformas — las demás siguen el mismo patrón: una `EntityDescription` extendida
   con `value_fn` / `set_fn`, y una tabla de descripciones. Para añadir una
   entidad, añade una fila a la tabla y su traducción; no hagas subclases.

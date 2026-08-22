@@ -17,7 +17,14 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import FoscamError
-from .const import ALARM_AUDIO, ALARM_MOTION, MOTION_VARIANT_LEGACY, SENSITIVITY_MAX
+from .const import (
+    ALARM_AUDIO,
+    ALARM_MOTION,
+    MOTION_VARIANT_LEGACY,
+    SENSITIVITY_MAX,
+    VOLUME_MAX,
+    VOLUME_MIN,
+)
 from .coordinator import FoscamConfigEntry, FoscamCoordinator, FoscamData
 from .entity import FoscamEntity
 
@@ -34,6 +41,8 @@ class FoscamNumberDescription(NumberEntityDescription):
     dynamic_max: bool = False
     capability: str | None = None
     alarm: str = ALARM_MOTION
+    #: Sólo se crea si la alarma NO usa esta variante de firmware.
+    skip_variant: str | None = None
 
 
 def _alarm_field(field: str, alarm: str = ALARM_MOTION) -> Callable[[FoscamData], float | None]:
@@ -57,10 +66,30 @@ def _alarm_setter(
     return _setter
 
 
+async def _volume_setter(coordinator: FoscamCoordinator, value: float) -> None:
+    """Fijar el volumen del dispositivo."""
+    await coordinator.async_set_volume(int(value))
+
+
 NUMBERS: tuple[FoscamNumberDescription, ...] = (
+    FoscamNumberDescription(
+        key="device_volume",
+        translation_key="device_volume",
+        field="volume",
+        icon="mdi:volume-medium",
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.SLIDER,
+        native_min_value=VOLUME_MIN,
+        native_max_value=VOLUME_MAX,
+        native_step=1,
+        capability="volume",
+        value_fn=lambda data: None if data.volume is None else float(data.volume),
+        set_fn=_volume_setter,
+    ),
     FoscamNumberDescription(
         key="sensitivity",
         translation_key="sensitivity",
+        skip_variant=MOTION_VARIANT_LEGACY,
         field="sensitivity",
         icon="mdi:tune",
         entity_category=EntityCategory.CONFIG,
@@ -103,6 +132,7 @@ NUMBERS: tuple[FoscamNumberDescription, ...] = (
     FoscamNumberDescription(
         key="sound_sensitivity",
         translation_key="sound_sensitivity",
+        skip_variant=MOTION_VARIANT_LEGACY,
         field="sensitivity",
         alarm=ALARM_AUDIO,
         capability="audio_alarm",
@@ -143,10 +173,15 @@ async def async_setup_entry(
     """Dar de alta los controles numéricos."""
     coordinator = entry.runtime_data
     capabilities = coordinator.data.capabilities if coordinator.data else {}
+    variants = coordinator.client.alarm_variants
     async_add_entities(
         FoscamNumber(coordinator, description)
         for description in NUMBERS
-        if description.capability is None or capabilities.get(description.capability)
+        if (description.capability is None or capabilities.get(description.capability))
+        and (
+            description.skip_variant is None
+            or variants.get(description.alarm) != description.skip_variant
+        )
     )
 
 

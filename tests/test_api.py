@@ -379,3 +379,63 @@ def test_rtsp_url_falls_back_to_main_for_an_unknown_stream(api):
     session = FakeSession()
     client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
     assert client.rtsp_url("loquesea", 88).endswith("/videoMain")
+
+
+async def test_volume_is_read_and_written(api):
+    cuerpo = "<CGI_Result><result>0</result><volume>42</volume></CGI_Result>"
+    session = FakeSession({"getAudioVolume": cuerpo})
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+
+    assert await client.async_get_volume() == 42
+    await client.async_set_volume(80)
+    assert "cmd=setAudioVolume" in session.requests[-1]
+    assert "volume=80" in session.requests[-1]
+
+
+async def test_volume_returns_none_when_not_numeric(api):
+    # Un firmware que no soporte el comando puede devolver el campo vacio; es
+    # mejor una entidad sin valor que un ValueError en cada ciclo de sondeo.
+    cuerpo = "<CGI_Result><result>0</result><volume></volume></CGI_Result>"
+    session = FakeSession({"getAudioVolume": cuerpo})
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert await client.async_get_volume() is None
+
+
+async def test_mute_inverts_the_voice_enable_flag(api):
+    # El comando informa de si la voz esta HABILITADA. La inversion se hace una
+    # vez aqui para que ninguna entidad tenga que acordarse de darle la vuelta.
+    encendida = "<CGI_Result><result>0</result><isEnable>1</isEnable></CGI_Result>"
+    apagada = "<CGI_Result><result>0</result><isEnable>0</isEnable></CGI_Result>"
+
+    client = api.FoscamClient(
+        FakeSession({"getVoiceEnableState": encendida}),
+        "192.0.2.10",
+        443,
+        "u",
+        "p",
+        ssl=True,
+        verify_ssl=False,
+    )
+    assert await client.async_get_muted() is False
+
+    session = FakeSession({"getVoiceEnableState": apagada})
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+    assert await client.async_get_muted() is True
+
+    await client.async_set_muted(True)
+    assert "isEnable=0" in session.requests[-1]
+    await client.async_set_muted(False)
+    assert "isEnable=1" in session.requests[-1]
+
+
+async def test_status_led_is_not_inverted(api):
+    # A diferencia del mute, aqui isEnable=1 sí es "encendido".
+    session = FakeSession(
+        {"getLedEnableState": "<CGI_Result><result>0</result><isEnable>1</isEnable></CGI_Result>"}
+    )
+    client = api.FoscamClient(session, "192.0.2.10", 443, "u", "p", ssl=True, verify_ssl=False)
+
+    assert await client.async_get_status_led() is True
+    await client.async_set_status_led(False)
+    assert "cmd=setLedEnableState" in session.requests[-1]
+    assert "isEnable=0" in session.requests[-1]

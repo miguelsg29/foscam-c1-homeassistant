@@ -17,10 +17,16 @@ from .const import (
     ALARM_AUDIO,
     ALARM_MOTION,
     CMD_GET_INFRA,
+    CMD_GET_LED,
+    CMD_GET_VOICE,
+    CMD_GET_VOLUME,
     DEFAULT_INFO_INTERVAL,
     DEFAULT_SCAN_INTERVAL_CONFIG,
     DEFAULT_SCAN_INTERVAL_STATE,
     DOMAIN,
+    INFRA_AUTO,
+    INFRA_MODE_AUTO,
+    INFRA_ON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +39,9 @@ CAPABILITY_PROBES: dict[str, str] = {
     "siren": "getSirenConfig",
     "white_light": "getWhiteLightBrightness",
     "audio_alarm": "getAudioAlarmConfig",
+    "volume": CMD_GET_VOLUME,
+    "voice": CMD_GET_VOICE,
+    "status_led": CMD_GET_LED,
 }
 
 
@@ -47,6 +56,9 @@ class FoscamData:
     infra: dict[str, str] = field(default_factory=dict)
     siren: dict[str, str] = field(default_factory=dict)
     capabilities: dict[str, bool] = field(default_factory=dict)
+    volume: int | None = None
+    muted: bool | None = None
+    status_led: bool | None = None
 
     def state_int(self, key: str, default: int = -1) -> int:
         """Leer un campo numérico de getDevState."""
@@ -131,6 +143,12 @@ class FoscamCoordinator(DataUpdateCoordinator[FoscamData]):
                     data.infra = await self.client.async_get_infra_config()
                 if data.capabilities.get("siren"):
                     data.siren = await self.client.async_command("getSirenConfig")
+                if data.capabilities.get("volume"):
+                    data.volume = await self.client.async_get_volume()
+                if data.capabilities.get("voice"):
+                    data.muted = await self.client.async_get_muted()
+                if data.capabilities.get("status_led"):
+                    data.status_led = await self.client.async_get_status_led()
                 self._last_config = now
 
             if now - self._last_info >= DEFAULT_INFO_INTERVAL or not data.info:
@@ -189,6 +207,41 @@ class FoscamCoordinator(DataUpdateCoordinator[FoscamData]):
     async def async_set_infra_led(self, on: bool) -> None:
         """Encender o apagar el LED infrarrojo y refrescar."""
         await self.client.async_set_infra_led(on)
+        self.invalidate_config()
+        await self.async_request_refresh()
+
+    async def async_set_infra_choice(self, choice: str) -> None:
+        """Aplicar automático / encendido / apagado al LED infrarrojo."""
+        if choice == INFRA_AUTO:
+            await self.client.async_set_infra_mode(INFRA_MODE_AUTO)
+        else:
+            # `async_set_infra_led` ya pasa a manual antes de encender o apagar:
+            # en modo automático la cámara ignora los dos comandos.
+            await self.client.async_set_infra_led(choice == INFRA_ON)
+        self.invalidate_config()
+        await self.async_request_refresh()
+
+    async def async_set_volume(self, volume: int) -> None:
+        """Fijar el volumen del dispositivo y reflejarlo de inmediato."""
+        await self.client.async_set_volume(volume)
+        if self.data is not None:
+            self.data.volume = int(volume)
+        self.invalidate_config()
+        await self.async_request_refresh()
+
+    async def async_set_muted(self, muted: bool) -> None:
+        """Silenciar o restablecer el sonido y reflejarlo de inmediato."""
+        await self.client.async_set_muted(muted)
+        if self.data is not None:
+            self.data.muted = muted
+        self.invalidate_config()
+        await self.async_request_refresh()
+
+    async def async_set_status_led(self, on: bool) -> None:
+        """Encender o apagar el LED de estado y reflejarlo de inmediato."""
+        await self.client.async_set_status_led(on)
+        if self.data is not None:
+            self.data.status_led = on
         self.invalidate_config()
         await self.async_request_refresh()
 

@@ -19,9 +19,15 @@ from .const import (
     CMD_GET_DEV_INFO,
     CMD_GET_DEV_STATE,
     CMD_GET_INFRA,
+    CMD_GET_LED,
+    CMD_GET_VOICE,
+    CMD_GET_VOLUME,
     CMD_OPEN_INFRA,
     CMD_REBOOT,
     CMD_SET_INFRA,
+    CMD_SET_LED,
+    CMD_SET_VOICE,
+    CMD_SET_VOLUME,
     CMD_SNAP,
     DEFAULT_TIMEOUT,
     MOTION_VARIANT_LEGACY,
@@ -367,6 +373,46 @@ class FoscamClient:
         password = quote(self._password, safe="")
         ruta = STREAM_PATHS[normalize_stream(stream)]
         return f"rtsp://{user}:{password}@{self._host}:{port}/{ruta}"
+
+    # -- Audio y LED de estado --------------------------------------------------
+    #
+    # Los tres son opcionales: hay modelos sin altavoz y modelos sin LED
+    # visible. El coordinator los sondea al arrancar y no crea las entidades si
+    # la camara no responde.
+
+    async def async_get_volume(self) -> int | None:
+        """Leer el volumen del dispositivo (0-100)."""
+        data = await self.async_command(CMD_GET_VOLUME)
+        raw = data.get("volume")
+        return int(raw) if raw is not None and str(raw).lstrip("-").isdigit() else None
+
+    async def async_set_volume(self, volume: int) -> None:
+        """Fijar el volumen del dispositivo (0-100)."""
+        await self.async_command(CMD_SET_VOLUME, {"volume": int(volume)})
+
+    async def async_get_muted(self) -> bool | None:
+        """Indicar si el sonido esta silenciado.
+
+        El comando informa de lo contrario —si la voz esta *habilitada*—, asi
+        que se invierte aqui y no en cada entidad: `isEnable=0` es silenciado.
+        """
+        data = await self.async_command(CMD_GET_VOICE)
+        raw = data.get("isEnable")
+        return None if raw is None else str(raw).strip() != "1"
+
+    async def async_set_muted(self, muted: bool) -> None:
+        """Silenciar o restablecer el sonido del dispositivo."""
+        await self.async_command(CMD_SET_VOICE, {"isEnable": 0 if muted else 1})
+
+    async def async_get_status_led(self) -> bool | None:
+        """Indicar si el LED de estado esta encendido."""
+        data = await self.async_command(CMD_GET_LED)
+        raw = data.get("isEnable")
+        return None if raw is None else str(raw).strip() == "1"
+
+    async def async_set_status_led(self, on: bool) -> None:
+        """Encender o apagar el LED de estado."""
+        await self.async_command(CMD_SET_LED, {"isEnable": 1 if on else 0})
 
     async def async_snapshot(self) -> bytes:
         """Pedir una foto fija a la cámara."""
